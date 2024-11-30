@@ -65,22 +65,20 @@ export default function Sidebar() {
                 icon: UserGroupIcon,
                 baseRoute: 'leads'
             },
-            // {
-            //     label: 'Reports',
-            //     icon: ChartBarIcon,
-            //     subItems: [
-            //         { href: route('reports.leads.index'), label: 'Leads', icon: ClipboardDocumentListIcon },
-            //         { href: route('reports.sales.index'), label: 'Sales', icon: CurrencyDollarIcon },
-            //         { href: route('reports.marketing.index'), label: 'Marketing', icon: ChartPieIcon },
-            //         // { href: '#', label: 'Logs', icon: ClockIcon },
-            //     ],
-            // },
-            // { 
-            //     href: route('accounts.index'), 
-            //     label: 'Accounts', 
-            //     icon: BanknotesIcon,
-            //     baseRoute: 'accounts'
-            // },
+            { 
+                href: route('accounts.index'), 
+                label: 'Accounts', 
+                icon: BanknotesIcon,
+                baseRoute: 'accounts',
+                onClick: (e) => {
+                    e.preventDefault();
+                    router.visit(route('accounts.index'), {
+                        preserveState: false,
+                        preserveScroll: false,
+                        replace: false
+                    });
+                }
+            },
             { 
                 href: route('invoices.index'), 
                 label: 'Invoices', 
@@ -88,7 +86,6 @@ export default function Sidebar() {
                 baseRoute: 'invoices',
                 onClick: (e) => {
                     e.preventDefault();
-                    console.log('Navigating to invoices index');
                     router.visit(route('invoices.index'), {
                         preserveState: false,
                         preserveScroll: false,

@@ -39,6 +39,7 @@ export default function InvoiceEdit({ auth, invoice }) {
                 message.success('Payment added successfully');
                 paymentForm.resetFields();
                 setShowPaymentModal(false);
+                router.reload();
             },
             onError: (errors) => {
                 message.error(Object.values(errors)[0]);

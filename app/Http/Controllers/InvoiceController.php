@@ -12,6 +12,7 @@ use App\Http\Requests\StoreInvoiceRequest;
 use Illuminate\Support\Facades\DB;
 use Inertia\Response;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Account;
 
 class InvoiceController extends Controller
 {
@@ -149,18 +150,29 @@ class InvoiceController extends Controller
                 ]);
             }
 
-            // If there's an initial payment
+            // If there's an initial payment, create payment record and account transaction
             if ($request->amount_received > 0) {
+                // Create payment record
                 $invoice->invoice_payments()->create([
                     'amount' => $request->amount_received,
                     'payment_date' => now(),
-                    'payment_method' => 'Initial Payment',
+                    'payment_method' => $request->payment_method ?? 'Cash',
                     'notes' => 'Initial payment at invoice creation',
+                ]);
+
+                // Create account transaction
+                Account::create([
+                    'payment_type' => 'Received',
+                    'payment_mode' => $request->payment_method ?? 'Cash',
+                    'transaction_type' => 'Credit',
+                    'amount' => $request->amount_received,
+                    'invoice_id' => $invoice->id,
+                    'notes' => $request->notes ?? 'Initial payment for invoice #' . $invoice->invoice_number,
+                    'created_by' => auth()->id()
                 ]);
             }
 
             DB::commit();
-
             return redirect()->back()->with('success', 'Invoice created successfully');
 
         } catch (\Exception $e) {
@@ -279,5 +291,49 @@ class InvoiceController extends Controller
         $pdf = PDF::loadView('pdf.invoice', $data);
         
         return $pdf->download('invoice-' . $invoice->invoice_number . '.pdf');
+    }
+
+    public function handleAddPayment(Request $request, Invoice $invoice)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Create payment record
+            $payment = $invoice->invoice_payments()->create([
+                'amount' => $request->amount,
+                'payment_date' => $request->payment_date ?? now(),
+                'payment_method' => $request->payment_method,
+                'transaction_reference' => $request->transaction_reference,
+                'notes' => $request->notes,
+            ]);
+
+            // Create account transaction
+            Account::create([
+                'payment_type' => 'Received',
+                'payment_mode' => 'Online',
+                'transaction_type' => 'Credit',
+                'amount' => $request->amount,
+                'invoice_id' => $invoice->id,
+                'notes' => $request->notes ?? 'Payment added for invoice #' . $invoice->invoice_number,
+                'created_by' => auth()->id()
+            ]);
+
+            // Update invoice amounts and status
+            $totalReceived = $invoice->invoice_payments()->sum('amount');
+            $invoice->update([
+                'amount_received' => $totalReceived,
+                'amount_remaining' => $invoice->total_amount - $totalReceived,
+                'status' => $totalReceived >= $invoice->total_amount ? 'paid' : 'partially_paid',
+                'updated_by' => auth()->id(),
+            ]);
+
+            DB::commit();
+            return response()->json(['success' => true, 'message' => 'Payment added successfully']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error adding payment: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to add payment'], 500);
+        }
     }
 }

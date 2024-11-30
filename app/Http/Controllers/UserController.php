@@ -5,62 +5,85 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use Illuminate\Support\Facades\Hash;
+use Inertia\Inertia;
+use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        //
+        $users = User::query()
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        return Inertia::render('User/UserIndex', [
+            'users' => $users
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(StoreUserRequest $request)
     {
-        //
+        $validated = $request->validated();
+        $validated['password'] = Hash::make($validated['password']);
+        
+        $validated['is_active'] = $request->boolean('is_active');
+        
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('users', 'public');
+            $validated['image'] = $path;
+        }
+        
+        User::create($validated);
+
+        return redirect()->back()
+            ->with('success', 'User created successfully');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(User $user)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(User $user)
     {
-        //
+        return Inertia::render('User/UserEdit', [
+            'user' => $user
+        ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(UpdateUserRequest $request, User $user)
     {
-        //
+        $validated = $request->validated();
+        
+        // Handle password
+        if ($request->filled('password')) {
+            $validated['password'] = Hash::make($validated['password']);
+        } else {
+            unset($validated['password']);
+        }
+
+        // Handle is_active
+        $validated['is_active'] = $request->boolean('is_active');
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($user->image) {
+                Storage::disk('public')->delete($user->image);
+            }
+            
+            $path = $request->file('image')->store('users', 'public');
+            $validated['image'] = $path;
+        }
+
+        // Update user
+        $user->update($validated);
+
+        return redirect()->route('users.index')
+            ->with('success', 'User updated successfully');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(User $user)
     {
-        //
+        $user->delete();
+
+        return redirect()->back()
+            ->with('success', 'User deleted successfully');
     }
 }

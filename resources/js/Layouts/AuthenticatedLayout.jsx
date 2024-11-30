@@ -17,7 +17,8 @@ import {
     Bars3Icon,
     BellIcon,
     XMarkIcon,
-    UserCircleIcon
+    UserCircleIcon,
+    UsersIcon
 } from '@heroicons/react/24/outline';
 import Dropdown from '@/Components/Dropdown';
 
@@ -41,7 +42,19 @@ export default function AuthenticatedLayout({ user, header, children }) {
                 { name: 'Marketing', href: '#', icon: ChartPieIcon },
             ],
         },
-        { name: 'Accounts', href: '#', icon: BanknotesIcon },
+        { 
+            name: 'Accounts', 
+            href: route('accounts.index'), 
+            icon: BanknotesIcon,
+            onClick: (e) => {
+                e.preventDefault();
+                router.visit(route('accounts.index'), {
+                    preserveState: false,
+                    preserveScroll: false,
+                    replace: false
+                });
+            }
+        },
         { 
             name: 'Invoices', 
             href: route('invoices.index'), 
@@ -49,6 +62,19 @@ export default function AuthenticatedLayout({ user, header, children }) {
             onClick: (e) => {
                 e.preventDefault();
                 router.visit(route('invoices.index'), {
+                    preserveState: false,
+                    preserveScroll: false,
+                    replace: false
+                });
+            }
+        },
+        { 
+            name: 'Users', 
+            href: route('users.index'), 
+            icon: UsersIcon,
+            onClick: (e) => {
+                e.preventDefault();
+                router.visit(route('users.index'), {
                     preserveState: false,
                     preserveScroll: false,
                     replace: false
@@ -191,7 +217,22 @@ export default function AuthenticatedLayout({ user, header, children }) {
                             <Dropdown>
                                 <Dropdown.Trigger>
                                     <button className="flex items-center space-x-3 text-sm focus:outline-none">
-                                        <UserCircleIcon className="h-8 w-8 text-gray-400" />
+                                        <div className="relative">
+                                            {user?.image ? (
+                                                <>
+                                                    <img
+                                                        src={`/storage/${user.image}`}
+                                                        alt={user.name}
+                                                        className="h-8 w-8 rounded-full object-cover"
+                                                    />
+                                                    {user.is_online && (
+                                                        <span className="absolute bottom-0 right-0 block h-2 w-2 rounded-full bg-green-400 ring-2 ring-white" />
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <UserCircleIcon className="h-8 w-8 text-gray-400" />
+                                            )}
+                                        </div>
                                         <span className="hidden md:inline-block font-medium text-gray-700">
                                             {user?.name || 'User'}
                                         </span>

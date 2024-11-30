@@ -6,6 +6,8 @@ use App\Http\Controllers\LeadNotesController;
 use App\Http\Controllers\LeadDocumentController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoicePaymentController;
+use App\Http\Controllers\AccountController;
+use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -55,6 +57,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('invoice-payments', [InvoicePaymentController::class, 'store'])->name('invoice-payments.store');
         Route::delete('invoice-payments/{payment}', [InvoicePaymentController::class, 'destroy'])
             ->name('invoice-payments.destroy');
+        Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
+        Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
+        Route::get('accounts/create', [AccountController::class, 'create'])->name('accounts.create');
+        Route::get('accounts/{account}', [AccountController::class, 'show'])->name('accounts.show');
+        Route::put('accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
+        Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
+        Route::get('accounts/{account}/edit', [AccountController::class, 'edit'])->name('accounts.edit');
+
+        // User Management Routes
+        Route::get('users', [UserController::class, 'index'])->name('users.index');
+        Route::post('users', [UserController::class, 'store'])->name('users.store');
+        Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+        Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

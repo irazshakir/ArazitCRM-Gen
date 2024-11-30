@@ -23,6 +23,7 @@
     "dependencies": {
         "@heroicons/react": "^2.2.0",
         "antd": "^5.22.2",
+        "moment": "^2.30.1",
         "react-hot-toast": "^2.4.1"
     }
 }
