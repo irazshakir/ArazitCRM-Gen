@@ -6,6 +6,11 @@ import LeadCreate from './LeadCreate';
 import { FilterOutlined, ClearOutlined } from '@ant-design/icons';
 
 export default function LeadIndex({ auth, leads, leadConstants, users, filters }) {
+    // Add error boundary
+    if (!auth?.user) {
+        return <div>Loading...</div>;
+    }
+
     const [loading, setLoading] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showFilterDrawer, setShowFilterDrawer] = useState(false);

@@ -13,10 +13,11 @@ class AdminUserSeeder extends Seeder
         User::create([
             'name' => 'araz',
             'email' => 'araz@arazit.com',
-            'password' => Hash::make('password'),
-            'email_verified_at' => now(),
+            'phone' => '1234',
             'role' => 'admin',
-            'is_active' => true,
+            'email_verified_at' => now(),
+            'password' => Hash::make('password'),
+            'is_active' => true
         ]);
     }
 } 

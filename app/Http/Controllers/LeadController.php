@@ -22,97 +22,108 @@ class LeadController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Lead::query()
-            ->with('assignedUser')
-            ->when($request->search, function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%");
+        try {
+            $query = Lead::query()
+                ->with('assignedUser')
+                ->when($request->search, function ($query, $search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    });
+                })
+                ->when($request->assigned_user_id, function ($query, $userId) {
+                    $query->where('assigned_user_id', $userId);
+                })
+                ->when($request->lead_status, function ($query, $status) {
+                    $query->where('lead_status', $status);
+                })
+                ->when($request->lead_source, function ($query, $source) {
+                    $query->where('lead_source', $source);
+                })
+                ->when($request->lead_active_status !== null, function ($query) use ($request) {
+                    $query->where('lead_active_status', $request->lead_active_status === '1');
+                })
+                ->when($request->followup_filter, function ($query, $filter) {
+                    switch ($filter) {
+                        case 'today':
+                            $query->whereDate('followup_date', today());
+                            break;
+                        case 'week':
+                            $query->whereBetween('followup_date', [now()->startOfWeek(), now()->endOfWeek()]);
+                            break;
+                        case 'month':
+                            $query->whereMonth('followup_date', now()->month)
+                                ->whereYear('followup_date', now()->year);
+                            break;
+                        case 'overdue':
+                            $query->where('followup_date', '<', today())
+                                ->where('updated_at', '<', today());
+                            break;
+                    }
                 });
-            })
-            ->when($request->assigned_user_id, function ($query, $userId) {
-                $query->where('assigned_user_id', $userId);
-            })
-            ->when($request->lead_status, function ($query, $status) {
-                $query->where('lead_status', $status);
-            })
-            ->when($request->lead_source, function ($query, $source) {
-                $query->where('lead_source', $source);
-            })
-            ->when($request->lead_active_status !== null, function ($query) use ($request) {
-                $query->where('lead_active_status', $request->lead_active_status === '1');
-            })
-            ->when($request->followup_filter, function ($query, $filter) {
-                switch ($filter) {
-                    case 'today':
-                        $query->whereDate('followup_date', today());
-                        break;
-                    case 'week':
-                        $query->whereBetween('followup_date', [now()->startOfWeek(), now()->endOfWeek()]);
-                        break;
-                    case 'month':
-                        $query->whereMonth('followup_date', now()->month)
-                            ->whereYear('followup_date', now()->year);
-                        break;
-                    case 'overdue':
-                        $query->where('followup_date', '<', today())
-                            ->where('updated_at', '<', today());
-                        break;
-                }
+
+            $query->orderByDesc('lead_active_status')
+                ->orderBy('followup_date')
+                ->orderBy(DB::raw("CASE 
+                    WHEN followup_period = 'AM' THEN 1 
+                    WHEN followup_period = 'PM' THEN 2 
+                    ELSE 3 END"))
+                ->orderBy('followup_hour')
+                ->orderBy('followup_minute');
+
+            $leads = $query->latest()->paginate(10)->withQueryString();
+            
+            $leads->through(function ($lead) {
+                $lead->followup_required = $lead->followup_date && 
+                    Carbon::parse($lead->followup_date)->endOfDay()->isPast();
+                return $lead;
             });
 
-        $query->orderByDesc('lead_active_status')
-            ->orderBy('followup_date')
-            ->orderBy(DB::raw("CASE 
-                WHEN followup_period = 'AM' THEN 1 
-                WHEN followup_period = 'PM' THEN 2 
-                ELSE 3 END"))
-            ->orderBy('followup_hour')
-            ->orderBy('followup_minute');
+            $users = User::where('is_active', true)->get(['id', 'name']);
 
-        $leads = $query->latest()->paginate(10)->withQueryString();
-        
-        $leads->through(function ($lead) {
-            $lead->followup_required = $lead->followup_date && 
-                Carbon::parse($lead->followup_date)->endOfDay()->isPast();
-            return $lead;
-        });
-
-        $users = User::where('is_active', true)->get(['id', 'name']);
-
-        return Inertia::render('Lead/LeadIndex', [
-            'leads' => [
-                'data' => $leads->items(),
-                'meta' => [
-                    'total' => $leads->total(),
-                    'per_page' => $leads->perPage(),
-                    'current_page' => $leads->currentPage(),
-                    'last_page' => $leads->lastPage(),
-                    'from' => $leads->firstItem(),
-                    'to' => $leads->lastItem(),
+            return Inertia::render('Lead/LeadIndex', [
+                'auth' => [
+                    'user' => Auth::user()
                 ],
-                'links' => $leads->linkCollection()->toArray(),
-            ],
-            'users' => $users,
-            'filters' => $request->only([
-                'search',
-                'assigned_user_id',
-                'lead_status',
-                'lead_source',
-                'followup_filter',
-                'lead_active_status'
-            ]),
-            'can' => [
-                'create_lead' => Auth::user()->role === 'admin',
-                'edit_lead' => Auth::user()->role === 'admin',
-                'delete_lead' => Auth::user()->role === 'admin',
-            ],
-            'leadConstants' => [
-                'STATUSES' => Lead::STATUSES,
-                'SOURCES' => Lead::LEAD_SOURCES,
-                'CITIES' => Lead::CITIES,
-            ],
-        ]);
+                'leads' => [
+                    'data' => $leads->items(),
+                    'meta' => [
+                        'total' => $leads->total(),
+                        'per_page' => $leads->perPage(),
+                        'current_page' => $leads->currentPage(),
+                        'last_page' => $leads->lastPage(),
+                        'from' => $leads->firstItem(),
+                        'to' => $leads->lastItem(),
+                    ],
+                    'links' => $leads->linkCollection()->toArray(),
+                ],
+                'users' => $users,
+                'filters' => $request->only([
+                    'search',
+                    'assigned_user_id',
+                    'lead_status',
+                    'lead_source',
+                    'followup_filter',
+                    'lead_active_status'
+                ]),
+                'can' => [
+                    'create_lead' => Auth::user()->role === 'admin',
+                    'edit_lead' => Auth::user()->role === 'admin',
+                    'delete_lead' => Auth::user()->role === 'admin',
+                ],
+                'leadConstants' => [
+                    'STATUSES' => Lead::STATUSES,
+                    'SOURCES' => Lead::LEAD_SOURCES,
+                    'CITIES' => Lead::CITIES,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in LeadController@index', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
 
     /**

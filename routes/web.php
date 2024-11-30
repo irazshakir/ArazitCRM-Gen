@@ -4,6 +4,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadNotesController;
 use App\Http\Controllers\LeadDocumentController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\InvoicePaymentController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -32,16 +34,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('leads', LeadController::class);
         Route::post('leads/bulk-upload', [LeadController::class, 'bulkUpload'])->name('leads.bulk-upload');
         Route::get('leads/template-download', [LeadController::class, 'downloadTemplate'])->name('leads.template-download');
+        // lead notes related routes 
+        Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
+        Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
+        Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
+        Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
+
+        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+        Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+        Route::get('invoices/generate-number', [InvoiceController::class, 'generateInvoiceNumber'])
+            ->name('invoices.generate-number');
+        Route::get('invoices/won-leads', [InvoiceController::class, 'getWonLeads'])
+            ->name('invoices.won-leads');
+        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->name('invoices.update');
+        Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->name('invoices.destroy');
+        Route::get('invoices/{invoice}/edit', [InvoiceController::class, 'edit'])->name('invoices.edit');
+        Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
+        Route::post('invoice-payments', [InvoicePaymentController::class, 'store'])->name('invoice-payments.store');
+        Route::delete('invoice-payments/{payment}', [InvoicePaymentController::class, 'destroy'])
+            ->name('invoice-payments.destroy');
     });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
-    Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
-    Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
-    Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
+    
 });
 
 require __DIR__.'/auth.php';

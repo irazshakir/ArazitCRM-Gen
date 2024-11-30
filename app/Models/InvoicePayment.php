@@ -18,7 +18,7 @@ class InvoicePayment extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal',
+        'amount' => 'decimal:2',
         'payment_date' => 'date',
     ];
 
@@ -26,5 +26,4 @@ class InvoicePayment extends Model
     {
         return $this->belongsTo(Invoice::class);
     }
-} 
-
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import NavLink from '@/Components/NavLink';
 import { 
     HomeIcon, 
@@ -42,7 +42,19 @@ export default function AuthenticatedLayout({ user, header, children }) {
             ],
         },
         { name: 'Accounts', href: '#', icon: BanknotesIcon },
-        { name: 'Invoices', href: '#', icon: DocumentTextIcon },
+        { 
+            name: 'Invoices', 
+            href: route('invoices.index'), 
+            icon: DocumentTextIcon,
+            onClick: (e) => {
+                e.preventDefault();
+                router.visit(route('invoices.index'), {
+                    preserveState: false,
+                    preserveScroll: false,
+                    replace: false
+                });
+            }
+        },
         { name: 'Settings', href: '#', icon: Cog6ToothIcon },
     ];
 

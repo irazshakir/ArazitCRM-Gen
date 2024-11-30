@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import {
@@ -65,27 +65,36 @@ export default function Sidebar() {
                 icon: UserGroupIcon,
                 baseRoute: 'leads'
             },
-            {
-                label: 'Reports',
-                icon: ChartBarIcon,
-                subItems: [
-                    { href: route('reports.leads.index'), label: 'Leads', icon: ClipboardDocumentListIcon },
-                    { href: route('reports.sales.index'), label: 'Sales', icon: CurrencyDollarIcon },
-                    { href: route('reports.marketing.index'), label: 'Marketing', icon: ChartPieIcon },
-                    // { href: '#', label: 'Logs', icon: ClockIcon },
-                ],
-            },
-            { 
-                href: route('accounts.index'), 
-                label: 'Accounts', 
-                icon: BanknotesIcon,
-                baseRoute: 'accounts'
-            },
+            // {
+            //     label: 'Reports',
+            //     icon: ChartBarIcon,
+            //     subItems: [
+            //         { href: route('reports.leads.index'), label: 'Leads', icon: ClipboardDocumentListIcon },
+            //         { href: route('reports.sales.index'), label: 'Sales', icon: CurrencyDollarIcon },
+            //         { href: route('reports.marketing.index'), label: 'Marketing', icon: ChartPieIcon },
+            //         // { href: '#', label: 'Logs', icon: ClockIcon },
+            //     ],
+            // },
+            // { 
+            //     href: route('accounts.index'), 
+            //     label: 'Accounts', 
+            //     icon: BanknotesIcon,
+            //     baseRoute: 'accounts'
+            // },
             { 
                 href: route('invoices.index'), 
                 label: 'Invoices', 
                 icon: DocumentTextIcon,
-                baseRoute: 'invoices'
+                baseRoute: 'invoices',
+                onClick: (e) => {
+                    e.preventDefault();
+                    console.log('Navigating to invoices index');
+                    router.visit(route('invoices.index'), {
+                        preserveState: false,
+                        preserveScroll: false,
+                        replace: false
+                    });
+                }
             },
             {
                 href: route('users.index'),
@@ -138,9 +147,9 @@ export default function Sidebar() {
             isActive(subItem.baseRoute || subItem.href)
         );
 
-        return (
-            <div key={index} className="space-y-1">
-                {hasSubItems ? (
+        if (hasSubItems) {
+            return (
+                <div key={index} className="space-y-1">
                     <div>
                         <div
                             onClick={(e) => toggleSubmenu(e, item.label)}
@@ -191,23 +200,28 @@ export default function Sidebar() {
                             })}
                         </div>
                     </div>
-                ) : (
-                    <Link
-                        href={item.href}
-                        className={`flex items-center px-4 py-2 text-sm font-medium rounded-md
-                            ${active 
-                                ? 'bg-[#a92479] bg-opacity-10 text-[#a92479] font-semibold' 
-                                : 'text-gray-600 hover:bg-[#a92479] hover:bg-opacity-10 hover:text-[#a92479]'}`}
-                        preserveState
-                    >
-                        {Icon && <Icon className={`mr-3 flex-shrink-0 h-5 w-5 ${
-                            active ? 'text-[#a92479]' : 'text-gray-500'
-                        }`} />}
-                        {item.label}
-                    </Link>
-                )}
-            </div>
-        );
+                </div>
+            );
+        } else {
+            return (
+                <Link
+                    key={index}
+                    href={item.href}
+                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md
+                        ${active 
+                            ? 'bg-[#a92479] bg-opacity-10 text-[#a92479] font-semibold' 
+                            : 'text-gray-600 hover:bg-[#a92479] hover:bg-opacity-10 hover:text-[#a92479]'}`}
+                    onClick={item.onClick}
+                    preserveState={false}
+                    preserveScroll={false}
+                >
+                    {Icon && <Icon className={`mr-3 flex-shrink-0 h-5 w-5 ${
+                        active ? 'text-[#a92479]' : 'text-gray-500'
+                    }`} />}
+                    {item.label}
+                </Link>
+            );
+        }
     };
 
     return (

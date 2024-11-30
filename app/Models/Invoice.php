@@ -14,7 +14,6 @@ class Invoice extends Model
     protected $fillable = [
         'lead_id',
         'invoice_number',
-        'company_name',
         'total_amount',
         'amount_received',
         'amount_remaining',
@@ -25,9 +24,9 @@ class Invoice extends Model
     ];
 
     protected $casts = [
-        'total_amount' => 'decimal',
-        'amount_received' => 'decimal',
-        'amount_remaining' => 'decimal',
+        'total_amount' => 'decimal:2',
+        'amount_received' => 'decimal:2',
+        'amount_remaining' => 'decimal:2',
     ];
 
     public function lead(): BelongsTo
@@ -54,5 +53,4 @@ class Invoice extends Model
     {
         return $this->hasMany(InvoicePayment::class);
     }
-
 }
