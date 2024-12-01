@@ -37,7 +37,7 @@ export default function AuthenticatedLayout({ user, header, children }) {
             name: 'Reports',
             icon: ChartBarIcon,
             subItems: [
-                { name: 'Leads', href: route('leads.index'), icon: ClipboardDocumentListIcon },
+                { name: 'Leads', href: route('reports.leads'), icon: ClipboardDocumentListIcon },
                 { name: 'Sales', href: '#', icon: CurrencyDollarIcon },
                 { name: 'Marketing', href: '#', icon: ChartPieIcon },
             ],
@@ -81,7 +81,19 @@ export default function AuthenticatedLayout({ user, header, children }) {
                 });
             }
         },
-        { name: 'Settings', href: '#', icon: Cog6ToothIcon },
+        { 
+            name: 'Settings', 
+            href: route('settings.index'), 
+            icon: Cog6ToothIcon,
+            onClick: (e) => {
+                e.preventDefault();
+                router.visit(route('settings.index'), {
+                    preserveState: false,
+                    preserveScroll: false,
+                    replace: false
+                });
+            }
+        },
     ];
 
     const userNavigation = [

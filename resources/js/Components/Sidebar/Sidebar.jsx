@@ -103,7 +103,7 @@ export default function Sidebar() {
                 label: 'Settings',
                 icon: Cog6ToothIcon,
                 subItems: [
-                    { href: route('settings.index'), label: 'General', icon: WrenchScrewdriverIcon, baseRoute: 'settings' },
+                    { href: route('settings.index'), label: 'Company Settings', icon: WrenchScrewdriverIcon, baseRoute: 'settings' },
                     // { href: '#', label: 'Vendors', icon: BuildingStorefrontIcon },
                     // { href: '#', label: 'Transportation', icon: TruckIcon },
                     { href: route('umrah-packages.index'), label: 'Umrah Packages', icon: BookOpenIcon, baseRoute: 'umrah-packages' },
@@ -117,6 +117,15 @@ export default function Sidebar() {
                 label: 'Marketing',
                 icon: MegaphoneIcon,
                 baseRoute: 'marketing'
+            },
+            {
+                label: 'Reports',
+                icon: ChartBarIcon,
+                subItems: [
+                    { href: route('reports.leads'), label: 'Leads Report', icon: ClipboardDocumentListIcon, baseRoute: 'reports.leads' },
+                    { href: '#', label: 'Sales Report', icon: CurrencyDollarIcon },
+                    { href: '#', label: 'Marketing Report', icon: ChartPieIcon },
+                ],
             },
         ] : []),
         ...(auth.user.role === 'sales_consultant' ? [

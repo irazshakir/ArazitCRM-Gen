@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Add at the end of the file */
+.filter-drawer .ant-drawer-content-wrapper {
+    transition: transform 0.3s ease-in-out !important;
+}
+
+.ant-spin {
+    transition: opacity 0.3s ease-in-out;
+}
+
+

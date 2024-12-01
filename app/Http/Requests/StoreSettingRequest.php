@@ -22,7 +22,11 @@ class StoreSettingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'company_name' => 'required|string|max:255',
+            'company_phone' => 'required|string|max:255',
+            'company_email' => 'required|email|max:255',
+            'company_address' => 'required|string',
+            'company_logo' => 'required|image|mimes:jpeg,png,jpg|max:2048',
         ];
     }
 }
