@@ -2,40 +2,39 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import {
     UsersIcon,
-    CurrencyDollarIcon,
-    ChartBarIcon,
-    PhoneIcon,
+    UserGroupIcon,
+    ChartBarSquareIcon,
+    ClockIcon,
 } from '@heroicons/react/24/outline';
 
-export default function Dashboard({ auth }) {
-    // Example stats - you'll want to fetch these from your backend
-    const stats = [
+export default function Dashboard({ auth, stats }) {
+    const dashboardStats = [
         {
             name: 'Total Leads',
-            value: '0',
+            value: stats.totalLeads,
             icon: UsersIcon,
             change: '+4.75%',
             changeType: 'positive',
         },
         {
-            name: 'Revenue',
-            value: '$0.00',
-            icon: CurrencyDollarIcon,
-            change: '+54.02%',
+            name: 'Active Leads',
+            value: stats.activeLeads,
+            icon: UserGroupIcon,
+            change: '+10.18%',
             changeType: 'positive',
         },
         {
             name: 'Conversion Rate',
-            value: '0%',
-            icon: ChartBarIcon,
+            value: `${stats.conversionRatio}%`,
+            icon: ChartBarSquareIcon,
             change: '-1.39%',
             changeType: 'negative',
         },
         {
-            name: 'Active Leads',
-            value: '0',
-            icon: PhoneIcon,
-            change: '+10.18%',
+            name: 'Followup Required',
+            value: stats.followupRequired,
+            icon: ClockIcon,
+            change: '+54.02%',
             changeType: 'positive',
         },
     ];
@@ -54,7 +53,7 @@ export default function Dashboard({ auth }) {
             <div className="p-4 sm:p-6 lg:p-8">
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                    {stats.map((stat, index) => (
+                    {dashboardStats.map((stat, index) => (
                         <div
                             key={index}
                             className="relative overflow-hidden bg-white rounded-lg shadow"
