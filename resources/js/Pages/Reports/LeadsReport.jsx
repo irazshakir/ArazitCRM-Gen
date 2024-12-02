@@ -256,6 +256,7 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
                     </Form>
                 </Spin>
             </Drawer>
+            
 
             <Spin spinning={loading}>
                 <div className="p-6">
@@ -303,7 +304,7 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
                     </Row>
 
                     {/* Main Chart - Lead Trends */}
-                    <Card className="mt-8">
+                    {/* <Card className="mt-8">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-medium">Lead Trends</h3>
                             <div className="text-sm text-gray-500">
@@ -339,6 +340,54 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
                                     />
                                 </BarChart>
                             </ResponsiveContainer>
+                        </div>
+                    </Card> */}
+                    
+                    
+                    <Card className="mt-8">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-medium">Lead Trends</h3>
+                            <div className="text-sm text-gray-500">
+                                Monthly Comparison
+                            </div>
+                        </div>
+                        <div style={{ width: '100%', height: 400 }}>
+                            {monthlyTrends && monthlyTrends.length > 0 ? (
+                                <ResponsiveContainer>
+                                    <BarChart
+                                        data={monthlyTrends}
+                                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            tick={{ fontSize: 12 }}
+                                        />
+                                        <YAxis 
+                                            tick={{ fontSize: 12 }}
+                                        />
+                                        <Tooltip 
+                                            cursor={{ fill: 'rgba(169, 36, 121, 0.20)' }}
+                                            contentStyle={{ fontSize: 12 }}
+                                        />
+                                        <Legend />
+                                        <Bar 
+                                            dataKey="Created" 
+                                            fill="#a92479" 
+                                            barSize={20}
+                                        />
+                                        <Bar 
+                                            dataKey="Closed" 
+                                            fill="rgba(169, 36, 121, 0.7)" 
+                                            barSize={20}
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-gray-500">
+                                    No data available for the selected period
+                                </div>
+                            )}
                         </div>
                     </Card>
 

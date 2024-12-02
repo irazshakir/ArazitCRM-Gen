@@ -11,6 +11,21 @@ class Marketing extends Model
 
     protected $table = 'marketing';
 
+    const LEAD_SOURCES = [
+        'Facebook',
+        'Instagram',
+        'LinkedIn',
+        'Whatsapp',
+        'Google-Ads',
+        'Youtube-Ads',
+        'SEO',
+        'Direct-Call',
+        'Twitter',
+        'Client-Referral',
+        'Personal-Referral',
+        'Others'
+    ];
+
     protected $fillable = [
         'campaign_name',
         'cost',
@@ -21,7 +36,7 @@ class Marketing extends Model
     ];
 
     protected $casts = [
-        'cost' => 'decimal',
+        'cost' => 'decimal:2',
         'campaign_status' => 'boolean',
         'start_date' => 'date',
         'end_date' => 'date',

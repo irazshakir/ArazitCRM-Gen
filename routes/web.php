@@ -10,6 +10,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\MarketingController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -74,7 +75,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
         Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
 
-        // Add this new route for settings
+        // Marketing Routes
+        Route::get('marketing', [MarketingController::class, 'index'])->name('marketing.index');
+        Route::post('marketing', [MarketingController::class, 'store'])->name('marketing.store');
+        Route::get('marketing/{marketing}/edit', [MarketingController::class, 'edit'])->name('marketing.edit');
+        Route::put('marketing/{marketing}', [MarketingController::class, 'update'])->name('marketing.update');
+        Route::delete('marketing/{marketing}', [MarketingController::class, 'destroy'])->name('marketing.destroy');
+        Route::get('reports/marketing', [MarketingController::class, 'report'])->name('marketing.report');
+
+        // Settings route
         Route::resource('settings', SettingController::class);
     });
 
@@ -84,6 +93,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware(['auth'])->group(function () {
         Route::get('/reports/leads', [ReportController::class, 'leadsReport'])->name('reports.leads');
+        Route::get('/reports/sales', [ReportController::class, 'salesReport'])->name('reports.sales');
+        Route::get('/reports/marketing', [ReportController::class, 'marketingReport'])->name('reports.marketing');
         // Add other report routes
     });
 });

@@ -123,8 +123,8 @@ export default function Sidebar() {
                 icon: ChartBarIcon,
                 subItems: [
                     { href: route('reports.leads'), label: 'Leads Report', icon: ClipboardDocumentListIcon, baseRoute: 'reports.leads' },
-                    { href: '#', label: 'Sales Report', icon: CurrencyDollarIcon },
-                    { href: '#', label: 'Marketing Report', icon: ChartPieIcon },
+                    { href: route('reports.sales'), label: 'Sales Report', icon: CurrencyDollarIcon, baseRoute: 'reports.sales' },
+                    { href: route('reports.marketing'), label: 'Marketing Report', icon: ChartPieIcon, baseRoute: 'reports.marketing' },
                 ],
             },
         ] : []),

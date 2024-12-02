@@ -18,7 +18,8 @@ import {
     BellIcon,
     XMarkIcon,
     UserCircleIcon,
-    UsersIcon
+    UsersIcon,
+    MegaphoneIcon
 } from '@heroicons/react/24/outline';
 import Dropdown from '@/Components/Dropdown';
 
@@ -38,8 +39,8 @@ export default function AuthenticatedLayout({ user, header, children }) {
             icon: ChartBarIcon,
             subItems: [
                 { name: 'Leads', href: route('reports.leads'), icon: ClipboardDocumentListIcon },
-                { name: 'Sales', href: '#', icon: CurrencyDollarIcon },
-                { name: 'Marketing', href: '#', icon: ChartPieIcon },
+                { name: 'Sales', href: route('reports.sales'), icon: CurrencyDollarIcon },
+                { name: 'Marketing', href: route('reports.marketing'), icon: ChartPieIcon },
             ],
         },
         { 
@@ -62,6 +63,19 @@ export default function AuthenticatedLayout({ user, header, children }) {
             onClick: (e) => {
                 e.preventDefault();
                 router.visit(route('invoices.index'), {
+                    preserveState: false,
+                    preserveScroll: false,
+                    replace: false
+                });
+            }
+        },
+        { 
+            name: 'Marketing', 
+            href: route('marketing.index'), 
+            icon: MegaphoneIcon,
+            onClick: (e) => {
+                e.preventDefault();
+                router.visit(route('marketing.index'), {
                     preserveState: false,
                     preserveScroll: false,
                     replace: false
