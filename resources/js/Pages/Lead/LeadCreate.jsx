@@ -73,14 +73,18 @@ export default function LeadCreate({ show, onClose, users, leadConstants, produc
             const remarksMatch = text.match(/remarks:\s*([^,]+)/);
             if (remarksMatch) data.initial_remarks = remarksMatch[1].trim();
 
-            // Product extraction
+            // Product extraction with better error handling
             const productMatch = text.match(/product:\s*([^,]+)/);
             if (productMatch) {
                 const productName = productMatch[1].trim();
                 const product = products.find(p => 
                     p.name.toLowerCase() === productName.toLowerCase()
                 );
-                if (product) data.product_id = product.id;
+                if (product) {
+                    data.product_id = product.id;
+                } else {
+                    message.warning(`Product "${productName}" not found. Product will not be assigned.`);
+                }
             }
 
             handleSubmit(data);
@@ -166,7 +170,7 @@ export default function LeadCreate({ show, onClose, users, leadConstants, produc
                     <div className="space-y-4">
                         <div className="text-sm text-gray-500">
                             Example: name: John Doe, phone: 923088551111, assigned_user: araz, 
-                            source: Facebook, followup_date: 2024-11-30 time 4:00 PM, 
+                            source: Facebook, product: Visit Visa, followup_date: 2024-11-30 time 4:00 PM, 
                             remarks: Customer interested in web development
                         </div>
                         <Input.TextArea

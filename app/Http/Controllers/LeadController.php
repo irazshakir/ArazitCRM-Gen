@@ -75,7 +75,8 @@ class LeadController extends Controller
                 ->orderBy('followup_hour')
                 ->orderBy('followup_minute');
 
-            $leads = $query->latest()->paginate(10)->withQueryString();
+            $perPage = $request->input('per_page', 10);
+            $leads = $query->latest()->paginate($perPage);
             
             $leads->through(function ($lead) {
                 $lead->followup_required = $lead->followup_date && 

@@ -183,14 +183,14 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
         },
     ];
 
-    // Prepare pagination config with safety checks
-    const paginationConfig = leads?.meta ? {
-        total: leads.meta.total || 0,
-        pageSize: leads.meta.per_page || 10,
-        current: leads.meta.current_page || 1,
-        showSizeChanger: true,
-        showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} leads`,
-    } : false; // If no meta data, disable pagination
+    // Access the meta information correctly
+    const totalLeads = leads?.total;
+    const currentPage = leads?.current_page;
+    const perPage = leads?.per_page;
+    const lastPage = leads?.last_page;
+
+    // Log the correct values
+  
 
     return (
         <AuthenticatedLayout user={auth.user}>
@@ -242,12 +242,15 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
                             rowKey="id"
                             loading={loading}
                             pagination={{
-                                total: leads?.meta?.total || 0,
-                                pageSize: leads?.meta?.per_page || 10,
-                                current: leads?.meta?.current_page || 1,
+                                total: leads?.total || 0,
+                                pageSize: leads?.per_page || 10,
+                                current: leads?.current_page || 1,
                                 showSizeChanger: true,
                                 showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} leads`,
-                                pageSizeOptions: ['10', '25', '50', '100']
+                                pageSizeOptions: ['10', '25', '50', '100'],
+                                defaultPageSize: 10,
+                                hideOnSinglePage: false,
+                                showQuickJumper: true,
                             }}
                             onChange={(pagination, filters, sorter) => {
                                 router.get(route('leads.index'), {
