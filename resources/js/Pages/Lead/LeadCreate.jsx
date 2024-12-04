@@ -295,7 +295,7 @@ export default function LeadCreate({ show, onClose, users, leadConstants, produc
                                 placeholder="Initial Remarks"
                                 value={form.initial_remarks}
                                 onChange={e => setForm({ ...form, initial_remarks: e.target.value })}
-                                bordered={false}
+                                variant="borderless"
                                 className="py-2"
                                 autoSize={{ minRows: 2, maxRows: 4 }}
                             />

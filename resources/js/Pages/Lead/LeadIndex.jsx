@@ -1,9 +1,10 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Table, Button, Space, Popconfirm, message, Drawer, Form, Select, Input, DatePicker, Badge } from 'antd';
 import LeadCreate from './LeadCreate';
 import { FilterOutlined, ClearOutlined } from '@ant-design/icons';
+import Pusher from 'pusher-js';
 
 export default function LeadIndex({ auth, leads, leadConstants, users, filters, products }) {
     // Add error boundary
@@ -20,6 +21,33 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
     const hasActiveFilters = Object.values(filters || {}).some(value => 
         value !== null && value !== undefined && value !== ''
     );
+
+    useEffect(() => {
+        // Initialize Pusher
+        const pusher = new Pusher('ab43b7081fd487b51b53', {
+            cluster: 'ap2',
+        });
+
+        // Subscribe to leads channel
+        const channel = pusher.subscribe('leads');
+
+        // Listen for LeadUpdated event
+        channel.bind('App\\Events\\LeadUpdated', (data) => {
+            // Refresh the data using Inertia
+            router.reload({ only: ['leads'] });
+        });
+
+        // Listen for LeadCreated event
+        channel.bind('App\\Events\\LeadCreated', (data) => {
+            console.log('Lead created:', data);
+            router.reload({ only: ['leads'] });
+        });
+
+        // Cleanup on component unmount
+        return () => {
+            pusher.unsubscribe('leads');
+        };
+    }, []);
 
     const handleFilter = (values) => {
         setShowFilterDrawer(false);

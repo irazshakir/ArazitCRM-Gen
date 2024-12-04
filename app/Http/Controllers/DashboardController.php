@@ -21,7 +21,7 @@ class DashboardController extends Controller
         $totalLeads = Lead::whereBetween('created_at', [$startDate, $endDate])->count();
 
         // Active Leads
-        $activeLeads = Lead::where('lead_active_status', true)->count();
+        $activeLeads = Lead::whereRaw('lead_active_status = true')->count();
 
         // Conversion Ratio
         $wonLeads = Lead::where('lead_status', 'Won')
@@ -32,7 +32,7 @@ class DashboardController extends Controller
             : 0;
 
         // Followup Required
-        $followupRequired = Lead::where('lead_active_status', true)
+        $followupRequired = Lead::whereRaw('lead_active_status = true')
             ->whereDate('followup_date', '<', Carbon::now())
             ->count();
 

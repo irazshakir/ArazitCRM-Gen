@@ -31,7 +31,7 @@ class Lead extends Model
     protected $casts = [
         'lead_active_status' => 'boolean',
         'notification_status' => 'boolean',
-        'followup_date' => 'date',
+        'followup_date' => 'datetime',
         'won_at' => 'datetime',
         'closed_at' => 'datetime',
     ];

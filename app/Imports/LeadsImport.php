@@ -13,7 +13,8 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 class LeadsImport implements ToModel, WithHeadingRow, WithValidation
 {
-    protected $skippedRows = 0;
+    private $skippedCount = 0;
+    private $importedLeads = [];
 
     public function model(array $row)
     {
@@ -24,7 +25,7 @@ class LeadsImport implements ToModel, WithHeadingRow, WithValidation
                 ->first();
 
             if ($existingLead) {
-                $this->skippedRows++;
+                $this->skippedCount++;
                 Log::info('Skipping duplicate lead', [
                     'phone' => $row['phone'],
                     'email' => $row['email'] ?? ($row['phone'] . '@placeholder.com')
@@ -32,7 +33,7 @@ class LeadsImport implements ToModel, WithHeadingRow, WithValidation
                 return null;
             }
 
-            Log::info('Processing row', ['row_data' => $row]);
+            // Log::info('Processing row', ['row_data' => $row]);
 
             // Convert phone to string if it's numeric
             $phone = is_numeric($row['phone']) ? (string)$row['phone'] : $row['phone'];
@@ -120,7 +121,7 @@ class LeadsImport implements ToModel, WithHeadingRow, WithValidation
             ]);
 
             // Create the lead
-            return new Lead([
+            $lead = new Lead([
                 // Mandatory fields
                 'name' => $row['name'],
                 'phone' => $phone,
@@ -145,6 +146,9 @@ class LeadsImport implements ToModel, WithHeadingRow, WithValidation
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            $this->importedLeads[] = $lead;
+            return $lead;
         } catch (\Exception $e) {
             Log::error('Error processing row', [
                 'error' => $e->getMessage(),
@@ -198,8 +202,13 @@ class LeadsImport implements ToModel, WithHeadingRow, WithValidation
         ];
     }
 
+    public function getImportedLeads()
+    {
+        return $this->importedLeads;
+    }
+
     public function getSkippedCount()
     {
-        return $this->skippedRows;
+        return $this->skippedCount;
     }
 } 

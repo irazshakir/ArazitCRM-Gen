@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Models\Product;
+use App\Events\LeadUpdated;
+use App\Events\LeadCreated;
 
 class LeadController extends Controller
 {
@@ -42,7 +44,7 @@ class LeadController extends Controller
                     $query->where('lead_source', $source);
                 })
                 ->when($request->lead_active_status !== null, function ($query) use ($request) {
-                    $query->where('lead_active_status', $request->lead_active_status === '1');
+                    $query->whereRaw('lead_active_status = ?', [$request->lead_active_status === '1']);
                 })
                 ->when($request->followup_filter, function ($query, $filter) {
                     switch ($filter) {
@@ -84,7 +86,7 @@ class LeadController extends Controller
                 return $lead;
             });
 
-            $users = User::where('is_active', true)->get(['id', 'name']);
+            $users = User::whereRaw('is_active = true')->get(['id', 'name']);
 
             return Inertia::render('Lead/LeadIndex', [
                 'auth' => [
@@ -97,7 +99,7 @@ class LeadController extends Controller
                     'STATUSES' => Lead::STATUSES,
                     'SOURCES' => Lead::LEAD_SOURCES,
                 ],
-                'products' => Product::where('active_status', true)
+                'products' => Product::whereRaw('active_status =true')
                     ->orderBy('name')
                     ->get(['id', 'name']),
             ]);
@@ -124,23 +126,29 @@ class LeadController extends Controller
     public function store(StoreLeadRequest $request)
     {
         try {
+            $validated = $request->validated();
+            
+            // Create the lead with explicit boolean using DB::raw
             $lead = Lead::create([
-                'name' => $request->name,
-                'phone' => $request->phone,
-                'email' => $request->email ?? $request->phone . '@placeholder.com',
-                'assigned_user_id' => $request->assigned_user_id,
-                'lead_source' => $request->lead_source,
-                'lead_status' => $request->lead_status ?? 'Query',
-                'initial_remarks' => $request->initial_remarks,
-                'followup_date' => $request->followup_date,
-                'followup_hour' => $request->followup_hour,
-                'followup_minute' => $request->followup_minute,
-                'followup_period' => $request->followup_period,
-                'lead_active_status' => true,
-                'city' => $request->city ?? 'Others',
-                'assigned_at' => $request->assigned_user_id ? now() : null,
-                'product_id' => $request->product_id,
+                'name' => $validated['name'],
+                'phone' => $validated['phone'],
+                'assigned_user_id' => $validated['assigned_user_id'],
+                'lead_source' => $validated['lead_source'],
+                'lead_status' => $validated['lead_status'] ?? 'Query',
+                'initial_remarks' => $validated['initial_remarks'] ?? null,
+                'followup_date' => $validated['followup_date'] ?? null,
+                'followup_hour' => $validated['followup_hour'] ?? null,
+                'followup_minute' => $validated['followup_minute'] ?? null,
+                'followup_period' => $validated['followup_period'] ?? null,
+                'lead_active_status' => DB::raw('true'),  // Use DB::raw for boolean
+                'product_id' => $validated['product_id'] ?? null,
+                'email' => $validated['email'] ?? $validated['phone'] . '@test.com',
+                'city' => $validated['city'] ?? 'Others',
+                'assigned_at' => $validated['assigned_user_id'] ? now() : null,
             ]);
+
+            // Broadcast the event
+            event(new LeadCreated($lead));
 
             return redirect()->back()->with('success', 'Lead created successfully');
         } catch (\Exception $e) {
@@ -167,13 +175,13 @@ class LeadController extends Controller
                 'notes.user',
                 'documents'
             ]),
-            'users' => User::where('is_active', true)->get(['id', 'name']),
+            'users' => User::whereRaw('is_active = true')->get(['id', 'name']),
             'leadConstants' => [
                 'STATUSES' => Lead::STATUSES,
                 'SOURCES' => Lead::LEAD_SOURCES,
                 'CITIES' => Lead::CITIES,
             ],
-            'products' => Product::where('active_status', true)
+            'products' => Product::whereRaw('active_status = true')
                 ->orderBy('name')
                 ->get(['id', 'name']),
         ]);
@@ -204,7 +212,15 @@ class LeadController extends Controller
             $validated['closed_at'] = now();
         }
 
+        // Cast boolean fields before update
+        if (isset($validated['notification_status'])) {
+            $validated['notification_status'] = (bool)$validated['notification_status'];
+        }
+
         $lead->update($validated);
+
+        // Broadcast the event
+        event(new LeadUpdated($lead));
 
         return redirect()->back()->with('success', 'Lead updated successfully');
     }
@@ -233,6 +249,12 @@ class LeadController extends Controller
             
             $import = new LeadsImport;
             Excel::import($import, $request->file('file'));
+
+            // Get the imported leads and broadcast events
+            $importedLeads = $import->getImportedLeads();
+            foreach ($importedLeads as $lead) {
+                event(new LeadCreated($lead));
+            }
             
             DB::commit();
             
