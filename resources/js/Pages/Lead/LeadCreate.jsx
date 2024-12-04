@@ -4,7 +4,7 @@ import { router } from '@inertiajs/react';
 import dayjs from 'dayjs';
 import { InboxOutlined } from '@ant-design/icons';
 
-export default function LeadCreate({ show, onClose, users, leadConstants }) {
+export default function LeadCreate({ show, onClose, users, leadConstants, products = [] }) {
     const [naturalInput, setNaturalInput] = useState('');
     const [formMode, setFormMode] = useState('quick'); // 'quick', 'natural', or 'bulk'
     const [form, setForm] = useState({
@@ -19,6 +19,7 @@ export default function LeadCreate({ show, onClose, users, leadConstants }) {
         followup_period: 'PM',
         lead_active_status: true,
         initial_remarks: '',
+        product_id: '',
     });
 
     const handleNaturalInput = () => {
@@ -26,7 +27,8 @@ export default function LeadCreate({ show, onClose, users, leadConstants }) {
             const data = {
                 lead_source: 'Facebook', // Default value
                 lead_status: 'Query',    // Default value
-                lead_active_status: true // Default value
+                lead_active_status: true, // Default value
+                product_id: '',
             };
             const text = naturalInput.toLowerCase();
 
@@ -70,6 +72,16 @@ export default function LeadCreate({ show, onClose, users, leadConstants }) {
             // Initial remarks extraction
             const remarksMatch = text.match(/remarks:\s*([^,]+)/);
             if (remarksMatch) data.initial_remarks = remarksMatch[1].trim();
+
+            // Product extraction
+            const productMatch = text.match(/product:\s*([^,]+)/);
+            if (productMatch) {
+                const productName = productMatch[1].trim();
+                const product = products.find(p => 
+                    p.name.toLowerCase() === productName.toLowerCase()
+                );
+                if (product) data.product_id = product.id;
+            }
 
             handleSubmit(data);
         } catch (error) {
@@ -282,6 +294,21 @@ export default function LeadCreate({ show, onClose, users, leadConstants }) {
                                 bordered={false}
                                 className="py-2"
                                 autoSize={{ minRows: 2, maxRows: 4 }}
+                            />
+                        </div>
+
+                        <div className="border-b border-gray-200">
+                            <Select
+                                placeholder="Select Product"
+                                value={form.product_id}
+                                onChange={value => setForm({ ...form, product_id: value })}
+                                className="w-full"
+                                bordered={false}
+                                options={Array.isArray(products) ? products.map(product => ({ 
+                                    label: product.name, 
+                                    value: product.id 
+                                })) : []}
+                                allowClear
                             />
                         </div>
 

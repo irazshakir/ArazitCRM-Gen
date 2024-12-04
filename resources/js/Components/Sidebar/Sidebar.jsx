@@ -22,6 +22,7 @@ import {
     ClipboardDocumentListIcon,
     ChartPieIcon,
     BookOpenIcon,
+    CubeIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Sidebar() {
@@ -103,13 +104,10 @@ export default function Sidebar() {
                 label: 'Settings',
                 icon: Cog6ToothIcon,
                 subItems: [
-                    { href: route('settings.index'), label: 'Company Settings', icon: WrenchScrewdriverIcon, baseRoute: 'settings' },
-                    // { href: '#', label: 'Vendors', icon: BuildingStorefrontIcon },
-                    // { href: '#', label: 'Transportation', icon: TruckIcon },
+                    { href: route('settings.index'), label: 'General', icon: WrenchScrewdriverIcon, baseRoute: 'settings' },
+                    { href: route('products.index'), label: 'Products', icon: CubeIcon, baseRoute: 'products' },
                     { href: route('umrah-packages.index'), label: 'Umrah Packages', icon: BookOpenIcon, baseRoute: 'umrah-packages' },
-                    // { href: '#', label: 'Hajj Packages', icon: BookOpenIcon },
                     { href: route('hotel-rates.index'), label: 'Hotel Rates', icon: StarIcon, baseRoute: 'hotel-rates' },
-                    // { href: '#', label: 'Accounts', icon: BanknotesIcon },
                 ],
             },
             {

@@ -19,7 +19,9 @@ import {
     XMarkIcon,
     UserCircleIcon,
     UsersIcon,
-    MegaphoneIcon
+    MegaphoneIcon,
+    WrenchScrewdriverIcon,
+    CubeIcon
 } from '@heroicons/react/24/outline';
 import Dropdown from '@/Components/Dropdown';
 
@@ -96,17 +98,36 @@ export default function AuthenticatedLayout({ user, header, children }) {
             }
         },
         { 
-            name: 'Settings', 
-            href: route('settings.index'), 
+            name: 'Settings',
             icon: Cog6ToothIcon,
-            onClick: (e) => {
-                e.preventDefault();
-                router.visit(route('settings.index'), {
-                    preserveState: false,
-                    preserveScroll: false,
-                    replace: false
-                });
-            }
+            subItems: [
+                { 
+                    name: 'General', 
+                    href: route('settings.index'), 
+                    icon: WrenchScrewdriverIcon,
+                    onClick: (e) => {
+                        e.preventDefault();
+                        router.visit(route('settings.index'), {
+                            preserveState: false,
+                            preserveScroll: false,
+                            replace: false
+                        });
+                    }
+                },
+                { 
+                    name: 'Products', 
+                    href: route('products.index'), 
+                    icon: CubeIcon,
+                    onClick: (e) => {
+                        e.preventDefault();
+                        router.visit(route('products.index'), {
+                            preserveState: false,
+                            preserveScroll: false,
+                            replace: false
+                        });
+                    }
+                }
+            ]
         },
     ];
 

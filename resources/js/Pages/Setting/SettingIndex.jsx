@@ -44,7 +44,7 @@ export default function SettingIndex({ auth, setting }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Company Settings</h2>}
+            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">General Settings</h2>}
         >
             <Head title="Settings" />
 

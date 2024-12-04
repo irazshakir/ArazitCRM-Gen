@@ -14,6 +14,7 @@ use App\Imports\LeadsImport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Models\Product;
 
 class LeadController extends Controller
 {
@@ -24,7 +25,7 @@ class LeadController extends Controller
     {
         try {
             $query = Lead::query()
-                ->with('assignedUser')
+                ->with(['assignedUser', 'product'])
                 ->when($request->search, function ($query, $search) {
                     $query->where(function ($q) use ($search) {
                         $q->where('name', 'like', "%{$search}%")
@@ -60,6 +61,9 @@ class LeadController extends Controller
                                 ->where('updated_at', '<', today());
                             break;
                     }
+                })
+                ->when($request->product_id, function ($query, $productId) {
+                    $query->where('product_id', $productId);
                 });
 
             $query->orderByDesc('lead_active_status')
@@ -85,37 +89,16 @@ class LeadController extends Controller
                 'auth' => [
                     'user' => Auth::user()
                 ],
-                'leads' => [
-                    'data' => $leads->items(),
-                    'meta' => [
-                        'total' => $leads->total(),
-                        'per_page' => $leads->perPage(),
-                        'current_page' => $leads->currentPage(),
-                        'last_page' => $leads->lastPage(),
-                        'from' => $leads->firstItem(),
-                        'to' => $leads->lastItem(),
-                    ],
-                    'links' => $leads->linkCollection()->toArray(),
-                ],
+                'leads' => $leads,
+                'filters' => $request->all(['search', 'assigned_user_id', 'lead_status', 'lead_source', 'followup_filter', 'lead_active_status']),
                 'users' => $users,
-                'filters' => $request->only([
-                    'search',
-                    'assigned_user_id',
-                    'lead_status',
-                    'lead_source',
-                    'followup_filter',
-                    'lead_active_status'
-                ]),
-                'can' => [
-                    'create_lead' => Auth::user()->role === 'admin',
-                    'edit_lead' => Auth::user()->role === 'admin',
-                    'delete_lead' => Auth::user()->role === 'admin',
-                ],
                 'leadConstants' => [
                     'STATUSES' => Lead::STATUSES,
                     'SOURCES' => Lead::LEAD_SOURCES,
-                    'CITIES' => Lead::CITIES,
                 ],
+                'products' => Product::where('active_status', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name']),
             ]);
         } catch (\Exception $e) {
             \Log::error('Error in LeadController@index', [
@@ -137,21 +120,8 @@ class LeadController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreLeadRequest $request)
     {
-        // Basic validation for minimum required fields
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'phone' => 'required|string|unique:leads,phone',
-            'assigned_user_id' => 'nullable|exists:users,id',
-            'lead_source' => 'required|in:' . implode(',', Lead::LEAD_SOURCES),
-            'initial_remarks' => 'nullable|string',
-            'followup_date' => 'nullable|date',
-            'followup_hour' => 'nullable|string',
-            'followup_minute' => 'nullable|string',
-            'followup_period' => 'nullable|in:AM,PM',
-        ]);
-
         try {
             $lead = Lead::create([
                 'name' => $request->name,
@@ -168,6 +138,7 @@ class LeadController extends Controller
                 'lead_active_status' => true,
                 'city' => $request->city ?? 'Others',
                 'assigned_at' => $request->assigned_user_id ? now() : null,
+                'product_id' => $request->product_id,
             ]);
 
             return redirect()->back()->with('success', 'Lead created successfully');
@@ -189,40 +160,31 @@ class LeadController extends Controller
      */
     public function edit(Lead $lead)
     {
-        $users = User::where('is_active', true)->get(['id', 'name']);
-
         return Inertia::render('Lead/LeadEdit', [
-            'lead' => $lead->load(['assignedUser', 'notes.user', 'documents.user']),
-            'users' => $users,
+            'lead' => $lead->load([
+                'assignedUser',
+                'notes.user',
+                'documents'
+            ]),
+            'users' => User::where('is_active', true)->get(['id', 'name']),
             'leadConstants' => [
                 'STATUSES' => Lead::STATUSES,
                 'SOURCES' => Lead::LEAD_SOURCES,
                 'CITIES' => Lead::CITIES,
             ],
+            'products' => Product::where('active_status', true)
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Lead $lead)
+    public function update(UpdateLeadRequest $request, Lead $lead)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:leads,email,' . $lead->id,
-            'phone' => 'required|string|unique:leads,phone,' . $lead->id,
-            'city' => 'required|in:' . implode(',', Lead::CITIES),
-            'lead_status' => 'required|in:' . implode(',', Lead::STATUSES),
-            'lead_source' => 'required|in:' . implode(',', Lead::LEAD_SOURCES),
-            'initial_remarks' => 'nullable|string',
-            'assigned_user_id' => 'required|exists:users,id',
-            'followup_date' => 'nullable|date',
-            'followup_hour' => 'nullable|string',
-            'followup_minute' => 'nullable|string',
-            'followup_period' => 'nullable|in:AM,PM',
-            'lead_active_status' => 'required|boolean',
-        ]);
-
+        $validated = $request->validated();
+        
         // Handle assigned user change
         if ($lead->assigned_user_id !== $validated['assigned_user_id']) {
             $validated['assigned_at'] = now();

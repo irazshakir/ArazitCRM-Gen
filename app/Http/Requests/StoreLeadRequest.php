@@ -11,7 +11,7 @@ class StoreLeadRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -23,6 +23,7 @@ class StoreLeadRequest extends FormRequest
     {
         return [
             //
+            'product_id' => 'nullable|exists:products,id',
         ];
     }
 }

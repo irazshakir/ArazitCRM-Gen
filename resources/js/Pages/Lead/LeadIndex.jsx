@@ -5,7 +5,7 @@ import { Table, Button, Space, Popconfirm, message, Drawer, Form, Select, Input,
 import LeadCreate from './LeadCreate';
 import { FilterOutlined, ClearOutlined } from '@ant-design/icons';
 
-export default function LeadIndex({ auth, leads, leadConstants, users, filters }) {
+export default function LeadIndex({ auth, leads, leadConstants, users, filters, products }) {
     // Add error boundary
     if (!auth?.user) {
         return <div>Loading...</div>;
@@ -17,12 +17,21 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters }
     const [form] = Form.useForm();
 
     // Add this state to track if filters are applied
-    const hasActiveFilters = Object.keys(filters || {}).length > 0;
+    const hasActiveFilters = Object.values(filters || {}).some(value => 
+        value !== null && value !== undefined && value !== ''
+    );
 
     const handleFilter = (values) => {
         setShowFilterDrawer(false);
+        // Remove empty values before sending
+        const cleanedValues = Object.fromEntries(
+            Object.entries(values).filter(([_, value]) => 
+                value !== null && value !== undefined && value !== ''
+            )
+        );
+        
         router.get(route('leads.index'), {
-            ...values,
+            ...cleanedValues,
             page: 1, // Reset to first page when filtering
         }, {
             preserveState: true,
@@ -114,8 +123,8 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters }
                 
                 return (
                     <span className={isPast ? 'text-red-600 font-medium' : ''}>
-                        {`${date} ${time}`}
-                        {isPast && ' (Followup Required)'}
+                        {`${date}`} <br/> {`${time}`}
+                        {/* {isPast && ' (Followup Required)'} */}
                     </span>
                 );
             },
@@ -130,6 +139,14 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters }
                 }`}>
                     {status ? 'Open' : 'Closed'}
                 </span>
+            ),
+        },
+        {
+            title: 'Product',
+            dataIndex: ['product', 'name'],
+            key: 'product',
+            render: (text, record) => (
+                <span>{record.product?.name || 'Not Assigned'}</span>
             ),
         },
         {
@@ -318,6 +335,17 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters }
                                     />
                                 </Form.Item>
 
+                                <Form.Item name="product_id" label="Product">
+                                    <Select
+                                        allowClear
+                                        placeholder="Select product"
+                                        options={products.map(product => ({
+                                            label: product.name,
+                                            value: product.id
+                                        }))}
+                                    />
+                                </Form.Item>
+
                                 <Form.Item>
                                     <Space className="w-full justify-end">
                                         <Button onClick={() => setShowFilterDrawer(false)}>
@@ -343,6 +371,7 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters }
                             onClose={() => setShowCreateModal(false)}
                             users={users}
                             leadConstants={leadConstants}
+                            products={products}
                         />
                     </div>
                 </div>

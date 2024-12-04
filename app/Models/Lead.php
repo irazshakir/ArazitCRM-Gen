@@ -24,7 +24,8 @@ class Lead extends Model
         'followup_period',
         'won_at',
         'closed_at',
-        'lead_source'
+        'lead_source',
+        'product_id'
     ];
 
     protected $casts = [
@@ -103,5 +104,10 @@ class Lead extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(LeadDocument::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
     }
 }

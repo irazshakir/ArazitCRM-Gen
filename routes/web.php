@@ -12,6 +12,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\DashboardController; 
+use App\Http\Controllers\ProductController; 
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -79,6 +80,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Settings route
         Route::resource('settings', SettingController::class);
+
+        Route::resource('products', ProductController::class);
     });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

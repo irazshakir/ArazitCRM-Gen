@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import LeadNotes from '@/Components/LeadNotes';
 import LeadDocuments from '@/Components/LeadDocuments';
 
-export default function LeadEdit({ auth, lead, users, leadConstants }) {
+export default function LeadEdit({ auth, lead, users, leadConstants, products = [] }) {
     const [form, setForm] = useState({
         name: lead.name,
         email: lead.email,
@@ -21,6 +21,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
         followup_minute: lead.followup_minute || null,
         followup_period: lead.followup_period || null,
         lead_active_status: lead.lead_active_status,
+        product_id: lead.product_id || null,
     });
 
     const getTimeValue = () => {
@@ -87,7 +88,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     value={form.name}
                                                     onChange={e => setForm({ ...form, name: e.target.value })}
                                                     variant="borderless"
-                                                    className="py-2"
+                                                    className="py-2 mb-2"
                                                 />
                                             </div>
 
@@ -97,7 +98,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     value={form.email}
                                                     onChange={e => setForm({ ...form, email: e.target.value })}
                                                     variant="borderless"
-                                                    className="py-2"
+                                                    className="py-2 mb-2"
                                                 />
                                             </div>
 
@@ -107,7 +108,21 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     value={form.phone}
                                                     onChange={e => setForm({ ...form, phone: e.target.value })}
                                                     variant="borderless"
-                                                    className="py-2"
+                                                    className="py-2 mb-2"
+                                                />
+                                            </div>
+                                            <div className="border-b border-gray-200">
+                                                <Select
+                                                    placeholder="Select Product"
+                                                    value={form.product_id}
+                                                    onChange={value => setForm({ ...form, product_id: value })}
+                                                    className="w-full py-2 mb-2"
+                                                    variant="borderless"
+                                                    options={Array.isArray(products) ? products.map(product => ({ 
+                                                        label: product.name, 
+                                                        value: product.id 
+                                                    })) : []}
+                                                    allowClear
                                                 />
                                             </div>
 
@@ -116,7 +131,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     placeholder="City"
                                                     value={form.city}
                                                     onChange={value => setForm({ ...form, city: value })}
-                                                    className="w-full"
+                                                    className="w-full py-2 mb-2"
                                                     variant="borderless"
                                                     options={leadConstants.CITIES.map(city => ({ label: city, value: city }))}
                                                 />
@@ -127,7 +142,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     placeholder="Lead Status"
                                                     value={form.lead_status}
                                                     onChange={value => setForm({ ...form, lead_status: value })}
-                                                    className="w-full"
+                                                    className="w-full py-2 mb-2"
                                                     variant="borderless"
                                                     options={leadConstants.STATUSES.map(status => ({ label: status, value: status }))}
                                                 />
@@ -138,7 +153,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     placeholder="Lead Source"
                                                     value={form.lead_source}
                                                     onChange={value => setForm({ ...form, lead_source: value })}
-                                                    className="w-full"
+                                                    className="w-full py-2 mb-2"
                                                     variant="borderless"
                                                     options={leadConstants.SOURCES.map(source => ({ label: source, value: source }))}
                                                 />
@@ -159,14 +174,14 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
 
                                     {/* Lead Info Section */}
                                     <div>
-                                        <h3 className="text-lg font-medium text-gray-700 mb-4">Lead Information</h3>
+                                        <h3 className="text-lg font-medium text-gray-700 mb-4 py-4">Lead Information</h3>
                                         <div className="space-y-4">
                                             <div className="border-b border-gray-200">
                                                 <Select
                                                     placeholder="Assign To"
                                                     value={form.assigned_user_id}
                                                     onChange={value => setForm({ ...form, assigned_user_id: value })}
-                                                    className="w-full"
+                                                    className="w-full py-2 mb-2"
                                                     variant="borderless"
                                                     options={users.map(user => ({ label: user.name, value: user.id }))}
                                                 />
@@ -177,7 +192,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                     placeholder="Followup Date"
                                                     value={form.followup_date}
                                                     onChange={(date) => setForm({ ...form, followup_date: date })}
-                                                    className="flex-1"
+                                                    className="flex-1 mb-2"
                                                     variant="borderless"
                                                 />
                                                 <TimePicker
@@ -202,7 +217,7 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                                             });
                                                         }
                                                     }}
-                                                    className="flex-1"
+                                                    className="flex-1 mb-2"
                                                     variant="borderless"
                                                 />
                                             </div>
@@ -219,6 +234,8 @@ export default function LeadEdit({ auth, lead, users, leadConstants }) {
                                             </div>
                                         </div>
                                     </div>
+
+                                   
 
                                     <div className="mt-8">
                                         <Button 

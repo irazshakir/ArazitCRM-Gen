@@ -16,8 +16,10 @@ class SettingController extends Controller
     public function index()
     {
         $setting = Setting::first() ?? new Setting();
+        
         return Inertia::render('Setting/SettingIndex', [
-            'setting' => $setting
+            'setting' => $setting,
+            'pageTitle' => 'General Settings'
         ]);
     }
 
@@ -43,7 +45,8 @@ class SettingController extends Controller
 
         Setting::create($validated);
 
-        return redirect()->back()->with('success', 'Settings saved successfully');
+        return redirect()->back()
+            ->with('success', 'General settings saved successfully');
     }
 
     /**
@@ -70,7 +73,6 @@ class SettingController extends Controller
         $validated = $request->validated();
 
         if ($request->hasFile('company_logo')) {
-            // Delete old logo
             if ($setting->company_logo) {
                 Storage::disk('public')->delete($setting->company_logo);
             }
@@ -80,7 +82,8 @@ class SettingController extends Controller
 
         $setting->update($validated);
 
-        return redirect()->back()->with('success', 'Settings updated successfully');
+        return redirect()->back()
+            ->with('success', 'General settings updated successfully');
     }
 
     /**
