@@ -282,4 +282,78 @@ class LeadController extends Controller
             $headers
         );
     }
+
+    public function storeFromWebhook(Request $request)
+    {
+        // Verify the secret key from the header
+        if ($request->header('X-Webhook-Secret') !== env('MAKE_WEBHOOK_SECRET')) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        try {
+            // Get the raw input and remove any quotes
+            $rawInput = trim($request->getContent(), '"');
+
+            // Split the concatenated string
+            preg_match('/^(.+?)(\+\d+)(.*)$/', $rawInput, $matches);
+
+            if (count($matches) < 4) {
+                return response()->json([
+                    'message' => 'Invalid input format',
+                    'raw_input' => $rawInput
+                ], 422);
+            }
+
+            $name = trim($matches[1]);
+            $phone = trim($matches[2]);
+            $city = 'Others'; // Default city
+
+            // Validate the extracted data
+            $validator = \Validator::make([
+                'name' => $name,
+                'phone' => $phone,
+                'city' => $city
+            ], [
+                'name' => 'required|string|max:255',
+                'phone' => 'required|string|max:20',
+                'city' => 'required|string|in:' . implode(',', Lead::CITIES),
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $validatedData = $validator->validated();
+
+            // Create a new lead with required and default values
+            $lead = Lead::create([
+                'name' => $validatedData['name'],
+                'phone' => $validatedData['phone'],
+                'email' => $validatedData['phone'] . '@test.com',
+                'city' => $validatedData['city'],
+                'assigned_user_id' => 1,
+                'lead_source' => 'Facebook',
+                'lead_status' => 'Query',
+                'lead_active_status' => DB::raw('true'), 
+                'assigned_at' => now(),
+                'followup_date' => now()->format('Y-m-d'),
+                'created_at' => now(),
+            ]);
+
+            event(new LeadCreated($lead));
+
+            return response()->json([
+                'message' => 'Lead stored successfully',
+                'lead' => $lead
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to store lead',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

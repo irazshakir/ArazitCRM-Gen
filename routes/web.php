@@ -32,6 +32,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return $next($request);
     }, 'prefix' => 'admin'], function () {
         Route::resource('leads', LeadController::class);
+        Route::post('/webhook/leads', [LeadController::class, 'storeFromWebhook']);
         Route::post('leads/bulk-upload', [LeadController::class, 'bulkUpload'])->name('leads.bulk-upload');
         Route::get('leads/template-download', [LeadController::class, 'downloadTemplate'])->name('leads.template-download');
         // lead notes related routes 
