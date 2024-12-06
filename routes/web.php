@@ -24,6 +24,11 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('leads/unread-count', [LeadController::class, 'unreadCount'])->name('leads.unread-count');
+        Route::get('leads/unread-notifications', [LeadController::class, 'unreadNotifications'])
+            ->name('leads.unread-notifications');
+        Route::post('leads/{lead}/mark-as-viewed', [LeadController::class, 'markAsViewed'])
+            ->name('leads.mark-as-viewed');
 
     Route::group(['middleware' => function ($request, $next) {
         if (Auth::user()->role !== 'admin') {
@@ -83,6 +88,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('settings', SettingController::class);
 
         Route::resource('products', ProductController::class);
+
+        
     });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

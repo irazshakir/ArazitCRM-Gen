@@ -5,6 +5,9 @@ import { Table, Button, Space, Popconfirm, message, Drawer, Form, Select, Input,
 import LeadCreate from './LeadCreate';
 import { FilterOutlined, ClearOutlined } from '@ant-design/icons';
 import Pusher from 'pusher-js';
+import { notification } from 'antd';
+import dayjs from 'dayjs';
+import axios from 'axios';
 
 export default function LeadIndex({ auth, leads, leadConstants, users, filters, products }) {
     // Add error boundary
@@ -39,8 +42,56 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
 
         // Listen for LeadCreated event
         channel.bind('App\\Events\\LeadCreated', (data) => {
-            console.log('Lead created:', data);
-            router.reload({ only: ['leads'] });
+            if (data.assigned_user_id === auth.user.id) {
+                const followupDate = data.followup_date ? 
+                    dayjs(data.followup_date).format('D MMM YYYY') : 'Not set';
+                const followupTime = data.followup_hour && data.followup_minute ? 
+                    `${data.followup_hour}:${data.followup_minute} ${data.followup_period}` : '';
+                    
+                notification.open({
+                    message: 'New Lead Assigned',
+                    description: (
+                        <div className="space-y-1">
+                            <p><strong>Name:</strong> {data.name}</p>
+                            <p><strong>Phone:</strong> {data.phone}</p>
+                            <p><strong>Source:</strong> {data.leadData?.lead_source || 'Not specified'}</p>
+                            <p><strong>Follow-up:</strong> {followupDate} {followupTime}</p>
+                            {data.initial_remarks && (
+                                <div>
+                                    <strong>Notes:</strong>
+                                    <p className="mt-1 text-gray-600">{data.initial_remarks}</p>
+                                </div>
+                            )}
+                            <a 
+                                onClick={async (e) => {
+                                    e.preventDefault();
+                                    try {
+                                        // Mark as viewed first
+                                        await axios.post(`/leads/${data.id}/mark-as-viewed`);
+                                        // Then navigate
+                                        window.location.href = route('leads.edit', data.id);
+                                    } catch (error) {
+                                        console.error('Failed to mark as viewed:', error);
+                                        // Still navigate even if marking as viewed fails
+                                        window.location.href = route('leads.edit', data.id);
+                                    }
+                                }}
+                                href={route('leads.edit', data.id)} 
+                                className="text-blue-500 underline cursor-pointer"
+                            >
+                                View Lead
+                            </a>
+                        </div>
+                    ),
+                    placement: 'bottomRight',
+                    duration: 15,
+                    className: 'custom-notification',
+                    style: {
+                        width: '350px',
+                    },
+                });
+                router.reload({ only: ['leads'] });
+            }
         });
 
         // Cleanup on component unmount
@@ -95,13 +146,19 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
             title: 'Name',
             dataIndex: 'name',
             key: 'name',
-            sorter: true,
             render: (text, record) => (
                 <div className="flex items-center gap-2">
                     {record.followup_required && (
                         <span className="w-2 h-2 rounded-full bg-red-500" />
                     )}
-                    <span>{text}</span>
+                    <div className="flex items-center gap-2">
+                        {record.notification_status && (
+                            <span className="inline-flex items-center rounded-full bg-[#a92479] px-2 py-0.5 text-xs font-medium text-white">
+                                New
+                            </span>
+                        )}
+                        <span>{text}</span>
+                    </div>
                 </div>
             ),
         },
@@ -182,18 +239,28 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
             key: 'actions',
             render: (_, record) => (
                 <Space>
-                    <Link href={route('leads.edit', record.id)}>
-                        <Button 
-                            type="primary" 
-                            size="small"
-                            style={{
-                                backgroundColor: '#a92479',
-                                borderColor: '#a92479'
-                            }}
-                        >
-                            Edit
-                        </Button>
-                    </Link>
+                    <Button 
+                        type="primary" 
+                        size="small"
+                        style={{
+                            backgroundColor: '#a92479',
+                            borderColor: '#a92479'
+                        }}
+                        onClick={async () => {
+                            try {
+                                // Mark as viewed first
+                                await axios.post(`/leads/${record.id}/mark-as-viewed`);
+                                // Then navigate to edit page
+                                window.location.href = route('leads.edit', record.id);
+                            } catch (error) {
+                                console.error('Failed to mark as viewed:', error);
+                                // Still navigate even if marking as viewed fails
+                                window.location.href = route('leads.edit', record.id);
+                            }
+                        }}
+                    >
+                        Edit
+                    </Button>
                     <Popconfirm
                         title="Delete Lead"
                         description="Are you sure you want to delete this lead?"
@@ -374,6 +441,17 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
                                             label: product.name,
                                             value: product.id
                                         }))}
+                                    />
+                                </Form.Item>
+
+                                <Form.Item name="notification_status" label="Notification Status">
+                                    <Select
+                                        allowClear
+                                        placeholder="Select notification status"
+                                        options={[
+                                            { label: 'Unviewed', value: '1' },
+                                            { label: 'Viewed', value: '0' }
+                                        ]}
                                     />
                                 </Form.Item>
 

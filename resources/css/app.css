@@ -11,4 +11,18 @@
     transition: opacity 0.3s ease-in-out;
 }
 
+.custom-notification .ant-notification-notice-message {
+    color: #a92479;
+    font-weight: 600;
+}
+
+.custom-notification .ant-notification-notice-description {
+    margin-top: 8px;
+}
+
+.custom-notification strong {
+    color: #666;
+    display: inline-block;
+    width: 80px;
+}
 

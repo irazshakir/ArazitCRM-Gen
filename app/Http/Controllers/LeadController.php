@@ -66,6 +66,9 @@ class LeadController extends Controller
                 })
                 ->when($request->product_id, function ($query, $productId) {
                     $query->where('product_id', $productId);
+                })
+                ->when($request->notification_status !== null, function ($query) use ($request) {
+                    $query->whereRaw('notification_status = ?', [($request->notification_status === '1') ? 'true' : 'false']);
                 });
 
             $query->orderByDesc('lead_active_status')
@@ -93,7 +96,15 @@ class LeadController extends Controller
                     'user' => Auth::user()
                 ],
                 'leads' => $leads,
-                'filters' => $request->all(['search', 'assigned_user_id', 'lead_status', 'lead_source', 'followup_filter', 'lead_active_status']),
+                'filters' => $request->all([
+                    'search', 
+                    'assigned_user_id', 
+                    'lead_status', 
+                    'lead_source', 
+                    'followup_filter', 
+                    'lead_active_status',
+                    'notification_status'
+                ]),
                 'users' => $users,
                 'leadConstants' => [
                     'STATUSES' => Lead::STATUSES,
@@ -141,6 +152,7 @@ class LeadController extends Controller
                 'followup_minute' => $validated['followup_minute'] ?? null,
                 'followup_period' => $validated['followup_period'] ?? null,
                 'lead_active_status' => DB::raw('true'),  // Use DB::raw for boolean
+                'notification_status' => DB::raw('true'),  // Use DB::raw for boolean
                 'product_id' => $validated['product_id'] ?? null,
                 'email' => $validated['email'] ?? $validated['phone'] . '@test.com',
                 'city' => $validated['city'] ?? 'Others',
@@ -338,6 +350,7 @@ class LeadController extends Controller
                 'lead_source' => 'Facebook',
                 'lead_status' => 'Query',
                 'lead_active_status' => DB::raw('true'), 
+                'notification_status' => DB::raw('true'), 
                 'assigned_at' => now(),
                 'followup_date' => now()->format('Y-m-d'),
                 'created_at' => now(),
@@ -352,6 +365,65 @@ class LeadController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Failed to store lead',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function unreadCount()
+    {
+        $unreadCount = Lead::where('assigned_user_id', Auth::id())
+            ->whereRaw('notification_status = ?', [true])
+            ->count();
+
+        return response()->json(['unread_count' => $unreadCount]);
+    }
+
+    public function unreadNotifications()
+    {
+        try {
+            $notifications = Lead::query()
+                ->where('assigned_user_id', Auth::id())
+                ->whereRaw('notification_status = true')
+                ->select('id', 'name', 'notification_status', 'created_at')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'notifications' => $notifications
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch notifications',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function markAsViewed(Lead $lead)
+    {
+        try {
+            if ($lead->assigned_user_id === Auth::id()) {
+                $updated = DB::table('leads')
+                    ->where('id', $lead->id)
+                    ->update(['notification_status' => DB::raw('false')]);
+
+                return response()->json([
+                    'success' => true,
+                    'updated' => (bool)$updated
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark as viewed',
                 'error' => $e->getMessage()
             ], 500);
         }

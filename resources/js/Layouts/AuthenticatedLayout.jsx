@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, router } from '@inertiajs/react';
 import NavLink from '@/Components/NavLink';
 import { 
@@ -24,10 +24,14 @@ import {
     CubeIcon
 } from '@heroicons/react/24/outline';
 import Dropdown from '@/Components/Dropdown';
+import { Badge } from 'antd';
+import axios from 'axios';
+import { Menu } from 'antd';
 
 export default function AuthenticatedLayout({ user, header, children }) {
     const [showingSidebar, setShowingSidebar] = useState(false);
     const [openMenus, setOpenMenus] = useState({});
+    const [unreadNotifications, setUnreadNotifications] = useState([]);
 
     if (!user) {
         return null;
@@ -212,6 +216,79 @@ export default function AuthenticatedLayout({ user, header, children }) {
         );
     };
 
+    useEffect(() => {
+        fetchUnreadNotifications();
+
+        const pusher = new Pusher('ab43b7081fd487b51b53', {
+            cluster: 'ap2',
+        });
+
+        const channel = pusher.subscribe('leads');
+        channel.bind('App\\Events\\LeadCreated', (data) => {
+            if (data.assigned_user_id === user.id) {
+                fetchUnreadNotifications();
+            }
+        });
+
+        return () => {
+            pusher.unsubscribe('leads');
+        };
+    }, []);
+
+    const fetchUnreadNotifications = async () => {
+        try {
+            const response = await axios.get(route('leads.unread-notifications'));
+            if (response.data.success) {
+                setUnreadNotifications(response.data.notifications);
+            } else {
+                console.error('Failed to fetch notifications:', response.data.message);
+            }
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error.response?.data?.message || error.message);
+            setUnreadNotifications([]); // Set empty array on error
+        }
+    };
+
+    const handleNotificationClick = async (leadId) => {
+        try {
+            console.log('Marking notification as viewed:', leadId); // Debug log
+
+            // Mark as viewed first
+            const response = await axios.post(route('leads.mark-as-viewed', leadId));
+            console.log('Mark as viewed response:', response.data); // Debug log
+
+            // Then open the lead in a new tab
+            window.open(route('leads.edit', leadId), '_blank');
+            
+            // Remove this notification from the local state
+            setUnreadNotifications(prev => prev.filter(n => n.id !== leadId));
+            
+            // Force a refresh of the notifications
+            await fetchUnreadNotifications();
+            
+            // Refresh the page data
+            router.reload({ only: ['leads'] });
+        } catch (error) {
+            console.error('Failed to mark notification as viewed:', error);
+        }
+    };
+
+    const notificationItems = {
+        items: unreadNotifications.map((notification) => ({
+            key: notification.id,
+            label: (
+                <div 
+                    onClick={() => handleNotificationClick(notification.id)}
+                    className="cursor-pointer hover:bg-gray-50 py-2"
+                >
+                    <span className="text-sm font-medium text-gray-900">
+                        {notification.name}
+                    </span>
+                </div>
+            ),
+        })),
+    };
+
     return (
         <div className="min-h-screen bg-gray-100">
             {/* Sidebar */}
@@ -257,9 +334,20 @@ export default function AuthenticatedLayout({ user, header, children }) {
 
                         {/* Right side buttons */}
                         <div className="ml-auto flex items-center space-x-4">
-                            <button className="p-1 rounded-full text-gray-400 hover:text-gray-500">
-                                <BellIcon className="h-6 w-6" />
-                            </button>
+                            <div className="ml-4">
+                                <Dropdown
+                                    menu={notificationItems}
+                                    placement="bottomRight"
+                                    trigger={['click']}
+                                    overlayClassName="w-80"
+                                >
+                                    <div className="cursor-pointer">
+                                        <Badge count={unreadNotifications.length} offset={[-5, 5]}>
+                                            <BellIcon className="h-6 w-6 text-gray-400 hover:text-gray-500" />
+                                        </Badge>
+                                    </div>
+                                </Dropdown>
+                            </div>
                             
                             <Dropdown>
                                 <Dropdown.Trigger>
