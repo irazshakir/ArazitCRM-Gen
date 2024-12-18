@@ -185,7 +185,7 @@ class LeadController extends Controller
             'lead' => $lead->load([
                 'assignedUser',
                 'notes.user',
-                'documents'
+                'documents.user'
             ]),
             'users' => User::whereRaw('is_active = true')->get(['id', 'name']),
             'leadConstants' => [

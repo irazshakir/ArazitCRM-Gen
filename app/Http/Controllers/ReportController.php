@@ -29,11 +29,11 @@ class ReportController extends Controller
                 $query->where('lead_status', $status);
             })
             ->when($request->lead_active_status !== null, function ($query) use ($request) {
-                $query->where('lead_active_status', $request->lead_active_status === '1');
+                $query->where('lead_active_status = ?', [$request->lead_active_status === '1']);
             });
 
         $activeLeads = (clone $baseQuery)
-            ->where('lead_active_status', true)
+            ->whereRaw('lead_active_status =  true')
             ->count();
 
         $leadsCreated = (clone $baseQuery)
@@ -52,7 +52,7 @@ class ReportController extends Controller
 
         $followupRequired = (clone $baseQuery)
             ->where('followup_date', '<', Carbon::today())
-            ->where('lead_active_status', true)
+            ->whereRaw('lead_active_status = true')
             ->count();
 
         $userWiseStats = Lead::select(
@@ -81,7 +81,7 @@ class ReportController extends Controller
                     $query->where('lead_status', $status);
                 })
                 ->when($request->lead_active_status !== null, function ($query) use ($request) {
-                    $query->where('lead_active_status', $request->lead_active_status === '1');
+                    $query->whereRaw('lead_active_status = ?', [$request->lead_active_status === '1']);
                 })
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->groupBy(DB::raw("date_trunc('month', created_at)"))
@@ -147,8 +147,8 @@ class ReportController extends Controller
         $currentMonth = [now()->startOfMonth(), now()->endOfMonth()];
         $lastMonth = [now()->subMonth()->startOfMonth(), now()->subMonth()->endOfMonth()];
 
-        $current = Lead::where('lead_active_status', true)->count();
-        $previous = Lead::where('lead_active_status', true)
+        $current = Lead::whereRaw('lead_active_status = true')->count();
+        $previous = Lead::whereRaw('lead_active_status = true')
             ->whereDate('created_at', '<', $currentMonth[0])
             ->count();
 
@@ -218,11 +218,11 @@ class ReportController extends Controller
     private function calculateFollowupGrowth()
     {
         $current = Lead::where('followup_date', '<', today())
-            ->where('lead_active_status', true)
+            ->whereRaw('lead_active_status = true')
             ->count();
 
         $previous = Lead::where('followup_date', '<', today()->subMonth())
-            ->where('lead_active_status', true)
+            ->whereRaw('lead_active_status = true')
             ->count();
 
         if ($previous == 0) return ['percentage' => 0, 'type' => 'neutral'];

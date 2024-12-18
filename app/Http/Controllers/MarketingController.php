@@ -51,7 +51,7 @@ class MarketingController extends Controller
 
         // Get active campaigns for the dropdown only
         $activeCampaigns = Marketing::query()
-            ->where('campaign_status', true)
+            ->whereRaw('campaign_status = true')
             ->whereBetween('start_date', [
                 $request->start_date ?? now()->startOfMonth()->format('Y-m-d'),
                 $request->end_date ?? now()->endOfMonth()->format('Y-m-d')
@@ -87,7 +87,9 @@ class MarketingController extends Controller
 
     public function store(StoreMarketingRequest $request)
     {
-        $marketing = Marketing::create($request->validated());
+        $data = $request->validated();
+        $data['campaign_status'] = \DB::raw($data['campaign_status'] ? 'true' : 'false');
+        $marketing = Marketing::create($data);
         return redirect()->route('marketing.index')
             ->with('success', 'Marketing campaign created successfully.');
     }
@@ -102,7 +104,9 @@ class MarketingController extends Controller
 
     public function update(UpdateMarketingRequest $request, Marketing $marketing)
     {
-        $marketing->update($request->validated());
+        $data = $request->validated();
+        $data['campaign_status'] = \DB::raw($data['campaign_status'] ? 'true' : 'false');
+        $marketing->update($data);
         return redirect()->route('marketing.index')
             ->with('success', 'Marketing campaign updated successfully.');
     }
