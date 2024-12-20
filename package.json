@@ -26,6 +26,7 @@
         "@heroicons/react": "^2.2.0",
         "antd": "^5.22.2",
         "moment": "^2.30.1",
+        "pusher-js": "^8.4.0-rc2",
         "react-hot-toast": "^2.4.1",
         "recharts": "^2.13.3"
     }

@@ -13,6 +13,7 @@ class LeadCreated implements ShouldBroadcast
     use InteractsWithSockets, SerializesModels;
 
     public $leadData;
+    public $queue = 'sync'; // Force sync processing for this event
 
     /**
      * Create a new event instance.
@@ -32,6 +33,8 @@ class LeadCreated implements ShouldBroadcast
             'followup_period' => $lead->followup_period,
             'product_id' => $lead->product_id,
             'lead_active_status' => (bool)$lead->lead_active_status,
+            'created_at' => $lead->created_at,
+            'notification_status' => $lead->notification_status,
         ];
     }
 

@@ -5,8 +5,6 @@ namespace App\Events;
 use App\Models\Lead;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Queue\SerializesModels;
 
@@ -15,6 +13,7 @@ class LeadUpdated implements ShouldBroadcast
     use InteractsWithSockets, SerializesModels;
 
     public $leadData;
+    public $queue = 'sync'; // Force sync processing for this event
 
     /**
      * Create a new event instance.
@@ -36,6 +35,8 @@ class LeadUpdated implements ShouldBroadcast
             'followup_period' => $lead->followup_period,
             'product_id' => $lead->product_id,
             'lead_active_status' => (bool)$lead->lead_active_status,
+            'updated_at' => $lead->updated_at,
+            'notification_status' => $lead->notification_status,
         ];
     }
 
@@ -50,6 +51,11 @@ class LeadUpdated implements ShouldBroadcast
         return new Channel('leads');
     }
 
+    public function broadcastAs()
+    {
+        return 'lead.updated';
+    }
+
     /**
      * Get the data to broadcast.
      *
@@ -61,4 +67,3 @@ class LeadUpdated implements ShouldBroadcast
         return $this->leadData;
     }
 }
-
