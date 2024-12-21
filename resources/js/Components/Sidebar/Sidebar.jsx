@@ -126,17 +126,13 @@ export default function Sidebar() {
                 ],
             },
         ] : []),
-        ...(auth.user.role === 'sales_consultant' ? [
+        ...(auth.user.role === 'sales-consultant' ? [
             {
-                href: route('sales-consultant.leads'),
-                label: 'Leads',
+                href: route('sales-consultant.leads.index'),
+                label: 'My Leads',
                 icon: UserGroupIcon,
-            },
-            {
-                href: route('sales-consultant.invoices'),
-                label: 'Invoices',
-                icon: DocumentTextIcon,
-            },
+                baseRoute: 'sales-consultant.leads'
+            }
         ] : [])
     ];
 

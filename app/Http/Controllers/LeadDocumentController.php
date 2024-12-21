@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LeadDocument;
+use App\Models\Lead;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +20,12 @@ class LeadDocumentController extends Controller
         ]);
 
         try {
+            // Check if user has access to this lead
+            $lead = Lead::findOrFail($request->lead_id);
+            if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+                abort(403, 'You do not have permission to add documents to this lead.');
+            }
+
             $file = $request->file('file');
             $path = $file->store('lead-documents', 'public');
 
@@ -40,6 +47,12 @@ class LeadDocumentController extends Controller
     public function destroy(LeadDocument $document)
     {
         try {
+            // Check if user has access to this document
+            $lead = Lead::findOrFail($document->lead_id);
+            if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+                abort(403, 'You do not have permission to delete this document.');
+            }
+
             Storage::disk('public')->delete($document->document_path);
             $document->delete();
             return redirect()->back()->with('success', 'Document deleted successfully');
@@ -50,9 +63,19 @@ class LeadDocumentController extends Controller
 
     public function download(LeadDocument $document)
     {
-        return Storage::disk('public')->download(
-            $document->document_path,
-            $document->document_name
-        );
+        // Check if user has access to this document
+        $lead = Lead::findOrFail($document->lead_id);
+        if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+            abort(403, 'You do not have permission to download this document.');
+        }
+
+        try {
+            return Storage::disk('public')->download(
+                $document->document_path,
+                $document->document_name
+            );
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['error' => 'Failed to download document']);
+        }
     }
 }

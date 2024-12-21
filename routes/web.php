@@ -13,6 +13,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\DashboardController; 
 use App\Http\Controllers\ProductController; 
+use App\Http\Controllers\SalesConsultantController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -30,10 +31,16 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('leads/unread-count', [LeadController::class, 'unreadCount'])->name('leads.unread-count');
-        Route::get('leads/unread-notifications', [LeadController::class, 'unreadNotifications'])
-            ->name('leads.unread-notifications');
-        Route::post('leads/{lead}/mark-as-viewed', [LeadController::class, 'markAsViewed'])
-            ->name('leads.mark-as-viewed');
+    Route::get('leads/unread-notifications', [LeadController::class, 'unreadNotifications'])
+        ->name('leads.unread-notifications');
+    Route::post('leads/{lead}/mark-as-viewed', [LeadController::class, 'markAsViewed'])
+        ->name('leads.mark-as-viewed');
+
+    // Common routes for both admin and sales consultant
+    Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
+    Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
+    Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
+    Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
 
     Route::group(['middleware' => function ($request, $next) {
         if (Auth::user()->role !== 'admin') {
@@ -45,10 +52,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('leads/bulk-upload', [LeadController::class, 'bulkUpload'])->name('leads.bulk-upload');
         Route::get('leads/template-download', [LeadController::class, 'downloadTemplate'])->name('leads.template-download');
         // lead notes related routes 
-        Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
-        Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
-        Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
-        Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
+        // Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
+        // Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
+        // Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
+        // Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
 
         Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
@@ -96,6 +103,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         
     });
 
+    // Sales Consultant Routes
+    Route::group(['middleware' => function ($request, $next) {
+        if (Auth::user()->role !== 'sales-consultant') {
+            abort(403, 'Unauthorized action.');
+        }
+        return $next($request);
+    }, 'prefix' => 'sales-consultant'], function () {
+        Route::get('leads', [SalesConsultantController::class, 'index'])->name('sales-consultant.leads.index');
+        Route::get('leads/{lead}/edit', [SalesConsultantController::class, 'edit'])->name('sales-consultant.leads.edit');
+        Route::put('leads/{lead}', [SalesConsultantController::class, 'update'])->name('sales-consultant.leads.update');
+        // Add other sales consultant routes as needed
+    });
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -106,6 +126,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports/marketing', [ReportController::class, 'marketingReport'])->name('reports.marketing');
         // Add other report routes
     });
+    
 });
 
 require __DIR__.'/auth.php';

@@ -135,12 +135,18 @@ export default function AuthenticatedLayout({ user, header, children }) {
         },
     ];
 
+    const salesConsultantNavigation = [
+        { name: 'Dashboard', href: route('dashboard'), icon: HomeIcon },
+        { name: 'My Leads', href: route('sales-consultant.leads.index'), icon: UserGroupIcon },
+    ];
+
     const userNavigation = [
         { name: 'Dashboard', href: route('dashboard'), icon: HomeIcon },
         // Add other non-admin navigation items here
     ];
 
-    const navigation = user.role === 'admin' ? adminNavigation : userNavigation;
+    const navigation = user.role === 'admin' ? adminNavigation : 
+                      user.role === 'sales-consultant' ? salesConsultantNavigation : userNavigation;
 
     const toggleSubmenu = (name) => {
         setOpenMenus(prev => ({
