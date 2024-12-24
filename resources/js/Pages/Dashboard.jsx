@@ -8,30 +8,32 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function Dashboard({ auth, stats }) {
+    const isAdmin = auth.user.role === 'admin';
+    
     const dashboardStats = [
         {
-            name: 'Total Leads',
+            name: isAdmin ? 'Total Leads' : 'My Total Leads',
             value: stats.totalLeads,
             icon: UsersIcon,
             change: '+4.75%',
             changeType: 'positive',
         },
         {
-            name: 'Active Leads',
+            name: isAdmin ? 'Active Leads' : 'My Active Leads',
             value: stats.activeLeads,
             icon: UserGroupIcon,
             change: '+10.18%',
             changeType: 'positive',
         },
         {
-            name: 'Conversion Rate',
+            name: isAdmin ? 'Overall Conversion Rate' : 'My Conversion Rate',
             value: `${stats.conversionRatio}%`,
             icon: ChartBarSquareIcon,
             change: '-1.39%',
             changeType: 'negative',
         },
         {
-            name: 'Followup Required',
+            name: isAdmin ? 'Followup Required' : 'My Followups Required',
             value: stats.followupRequired,
             icon: ClockIcon,
             change: '+54.02%',
@@ -44,11 +46,11 @@ export default function Dashboard({ auth, stats }) {
             user={auth.user}
             header={
                 <h2 className="text-xl font-semibold leading-tight text-gray-800">
-                    Dashboard
+                    {isAdmin ? 'Dashboard' : 'My Dashboard'}
                 </h2>
             }
         >
-            <Head title="Dashboard" />
+            <Head title={isAdmin ? 'Dashboard' : 'My Dashboard'} />
 
             <div className="p-4 sm:p-6 lg:p-8">
                 {/* Stats Grid */}

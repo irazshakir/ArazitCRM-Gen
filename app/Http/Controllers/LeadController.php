@@ -152,7 +152,7 @@ class LeadController extends Controller
                 'followup_minute' => $validated['followup_minute'] ?? null,
                 'followup_period' => $validated['followup_period'] ?? null,
                 'lead_active_status' => DB::raw('true'),  // Use DB::raw for boolean
-                'notification_status' => DB::raw('true'),  // Use DB::raw for boolean
+                'notification_status' => DB::raw('false'),  // Set to false for new leads
                 'product_id' => $validated['product_id'] ?? null,
                 'email' => $validated['email'] ?? $validated['phone'] . '@test.com',
                 'city' => $validated['city'] ?? 'Others',
@@ -181,6 +181,13 @@ class LeadController extends Controller
      */
     public function edit(Lead $lead)
     {
+        // If the current user is the assigned user, mark the lead as viewed
+        if ($lead->assigned_user_id === Auth::id()) {
+            $lead->update([
+                'notification_status' => DB::raw('true')
+            ]);
+        }
+
         return Inertia::render('Lead/LeadEdit', [
             'lead' => $lead->load([
                 'assignedUser',
@@ -209,7 +216,7 @@ class LeadController extends Controller
         // Handle assigned user change
         if ($lead->assigned_user_id !== $validated['assigned_user_id']) {
             $validated['assigned_at'] = now();
-            $validated['notification_status'] = true;
+            $validated['notification_status'] = DB::raw('false'); // Set notification to false for new assignee
         }
 
         // Handle lead status change
@@ -222,11 +229,6 @@ class LeadController extends Controller
         // Handle active status change
         if (!$validated['lead_active_status'] && $lead->lead_active_status) {
             $validated['closed_at'] = now();
-        }
-
-        // Cast boolean fields before update
-        if (isset($validated['notification_status'])) {
-            $validated['notification_status'] = (bool)$validated['notification_status'];
         }
 
         $lead->update($validated);
@@ -258,6 +260,12 @@ class LeadController extends Controller
 
         try {
             DB::beginTransaction();
+            
+            // Set default values for imported leads
+            config(['excel.imports.leads.defaults' => [
+                'lead_active_status' => DB::raw('true'),
+                'notification_status' => DB::raw('false')  // Set notification_status to false for imported leads
+            ]]);
             
             $import = new LeadsImport;
             Excel::import($import, $request->file('file'));

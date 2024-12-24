@@ -175,6 +175,12 @@ class SalesConsultantController extends Controller
 
         $validated = $request->validated();
 
+        // Handle assigned user change
+        if ($lead->assigned_user_id !== $validated['assigned_user_id']) {
+            $validated['assigned_at'] = now();
+            $validated['notification_status'] = DB::raw('false'); // Set notification to false for new assignee
+        }
+
         // Handle lead status change
         if ($validated['lead_status'] === 'Won') {
             $validated['won_at'] = now();
@@ -185,11 +191,6 @@ class SalesConsultantController extends Controller
         // Handle active status change
         if (!$validated['lead_active_status'] && $lead->lead_active_status) {
             $validated['closed_at'] = now();
-        }
-
-        // Cast boolean fields before update
-        if (isset($validated['notification_status'])) {
-            $validated['notification_status'] = (bool)$validated['notification_status'];
         }
 
         $lead->update($validated);

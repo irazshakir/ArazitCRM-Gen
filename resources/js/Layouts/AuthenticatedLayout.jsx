@@ -348,7 +348,7 @@ export default function AuthenticatedLayout({ user, header, children }) {
                                     overlayClassName="w-80"
                                 >
                                     <div className="cursor-pointer">
-                                        <Badge count={unreadNotifications.length} offset={[-5, 5]}>
+                                        <Badge count={unreadNotifications.filter(n => !n.notification_status).length} offset={[-5, 5]}>
                                             <BellIcon className="h-6 w-6 text-gray-400 hover:text-gray-500" />
                                         </Badge>
                                     </div>

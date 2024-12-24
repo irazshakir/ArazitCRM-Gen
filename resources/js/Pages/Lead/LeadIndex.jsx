@@ -152,7 +152,7 @@ export default function LeadIndex({ auth, leads, leadConstants, users, filters, 
                         <span className="w-2 h-2 rounded-full bg-red-500" />
                     )}
                     <div className="flex items-center gap-2">
-                        {record.notification_status && (
+                        {!record.notification_status && (
                             <span className="inline-flex items-center rounded-full bg-[#a92479] px-2 py-0.5 text-xs font-medium text-white">
                                 New
                             </span>

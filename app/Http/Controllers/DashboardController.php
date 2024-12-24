@@ -8,6 +8,7 @@ use App\Models\Lead;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
@@ -17,14 +18,27 @@ class DashboardController extends Controller
         $startDate = Carbon::create($year)->startOfYear();
         $endDate = Carbon::create($year)->endOfYear();
 
+        // Base query depending on user role
+        $query = Lead::query();
+        
+        // If user is sales consultant, only show their leads
+        if (Auth::user()->role === 'sales-consultant') {
+            $query->where('assigned_user_id', Auth::id());
+        }
+
         // Total Leads
-        $totalLeads = Lead::whereBetween('created_at', [$startDate, $endDate])->count();
+        $totalLeads = (clone $query)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->count();
 
         // Active Leads
-        $activeLeads = Lead::whereRaw('lead_active_status = true')->count();
+        $activeLeads = (clone $query)
+            ->whereRaw('lead_active_status = true')
+            ->count();
 
         // Conversion Ratio
-        $wonLeads = Lead::where('lead_status', 'Won')
+        $wonLeads = (clone $query)
+            ->where('lead_status', 'Won')
             ->whereBetween('won_at', [$startDate, $endDate])
             ->count();
         $conversionRatio = $totalLeads > 0 
@@ -32,7 +46,8 @@ class DashboardController extends Controller
             : 0;
 
         // Followup Required
-        $followupRequired = Lead::whereRaw('lead_active_status = true')
+        $followupRequired = (clone $query)
+            ->whereRaw('lead_active_status = true')
             ->whereDate('followup_date', '<', Carbon::now())
             ->count();
 
