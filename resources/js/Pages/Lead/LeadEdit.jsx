@@ -25,12 +25,70 @@ export default function LeadEdit({ auth, lead, users, leadConstants, products = 
     });
 
     const [whatsappDrawer, setWhatsappDrawer] = useState(false);
-    const [messages, setMessages] = useState([
-        { id: 1, text: "Hello! How can I help you today?", sender: "user", time: "09:00" },
-        { id: 2, text: "I'm interested in your services", sender: "client", time: "09:05" },
-        // Add more sample messages as needed
-    ]);
+    const [messages, setMessages] = useState([]);
+    const [isTyping, setIsTyping] = useState(false);
     const [messageInput, setMessageInput] = useState('');
+    const [currentStep, setCurrentStep] = useState(0);
+
+    // Demo conversation
+    const demoConversation = [
+        { id: 1, text: "hello , want to inquire about your services", sender: "client" },
+        { id: 2, text: "sure , let me assist you , first let me ask you some questions to understand your requirements, may I know you name please ?", sender: "agent" },
+        { id: 3, text: "Usman", sender: "client" },
+        { id: 4, text: "Thanks , what service are you interested in ?", sender: "agent" },
+        { id: 5, text: "Web Development", sender: "client" },
+        { id: 6, text: "Sure , its better if I connect you with my business development manager as they can assist you properly. what is the best time to contact you ?", sender: "agent" },
+        { id: 7, text: "anytime today after 3 pm", sender: "client" },
+        { id: 8, text: "Sure will do that , I will get back to you soon", sender: "agent" },
+    ];
+
+    const handleSendMessage = () => {
+        if (messageInput.trim()) {
+            const newMessage = {
+                id: messages.length + 1,
+                text: messageInput,
+                sender: 'agent'
+            };
+            setMessages(prev => [...prev, newMessage]);
+            setMessageInput('');
+
+            // Find the next client message in the conversation
+            const nextClientMessage = demoConversation.find((msg, index) => {
+                return index > currentStep && msg.sender === 'client';
+            });
+
+            if (nextClientMessage) {
+                // Show typing effect after 3 seconds
+                setTimeout(() => {
+                    setIsTyping(true);
+                    // Show message after 10 seconds
+                    setTimeout(() => {
+                        setIsTyping(false);
+                        setMessages(prev => [...prev, nextClientMessage]);
+                        setCurrentStep(prev => {
+                            const nextIndex = demoConversation.findIndex(msg => msg.id === nextClientMessage.id);
+                            return nextIndex + 1;
+                        });
+                    }, 7000); // Additional 7 seconds (total 10 seconds)
+                }, 3000); // Initial 3 seconds delay for typing
+            }
+        }
+    };
+
+    const showWhatsappDrawer = () => {
+        setWhatsappDrawer(true);
+        setMessages([]);
+        setCurrentStep(0);
+        // Show typing after 3 seconds for initial message
+        setTimeout(() => {
+            setIsTyping(true);
+            setTimeout(() => {
+                setIsTyping(false);
+                setMessages([demoConversation[0]]);
+                setCurrentStep(1);
+            }, 7000);
+        }, 3000);
+    };
 
     const getTimeValue = () => {
         if (!form.followup_hour || !form.followup_minute || !form.followup_period) {
@@ -72,25 +130,8 @@ export default function LeadEdit({ auth, lead, users, leadConstants, products = 
         });
     };
 
-    const showWhatsappDrawer = () => {
-        setWhatsappDrawer(true);
-    };
-
     const closeWhatsappDrawer = () => {
         setWhatsappDrawer(false);
-    };
-
-    const handleSendMessage = () => {
-        if (messageInput.trim()) {
-            const newMessage = {
-                id: messages.length + 1,
-                text: messageInput,
-                sender: 'user',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-            setMessages([...messages, newMessage]);
-            setMessageInput('');
-        }
     };
 
     const handleImageUpload = (e) => {
@@ -335,103 +376,60 @@ export default function LeadEdit({ auth, lead, users, leadConstants, products = 
             {/* WhatsApp Drawer */}
             <Drawer
                 title={
-                    <div className="flex items-center gap-3">
-                        <Avatar style={{ backgroundColor: '#25D366' }}>
-                            {lead.name ? lead.name.charAt(0).toUpperCase() : 'U'}
-                        </Avatar>
-                        <div>
-                            <div className="font-semibold">{lead.name}</div>
-                            <div className="text-sm text-gray-500">{lead.phone}</div>
-                        </div>
+                    <div className="flex items-center">
+                        <Avatar style={{ backgroundColor: '#87d068' }} icon={<i className="fas fa-user" />} />
+                        <span className="ml-2">+923010441111</span>
                     </div>
                 }
                 placement="right"
                 width={400}
                 onClose={closeWhatsappDrawer}
                 open={whatsappDrawer}
-                bodyStyle={{ padding: '0', height: 'calc(100% - 55px)' }}
             >
                 <div className="flex flex-col h-full">
-                    {/* Chat Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                    <div className="flex-1 overflow-y-auto mb-4 space-y-4">
                         {messages.map((message) => (
                             <div
                                 key={message.id}
-                                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-4`}
+                                className={`flex ${message.sender === 'agent' ? 'justify-start' : 'justify-end'}`}
                             >
                                 <div
                                     className={`max-w-[70%] rounded-lg p-3 ${
-                                        message.sender === 'user'
-                                            ? 'bg-[#25D366] text-white'
-                                            : 'bg-white shadow-sm'
+                                        message.sender === 'agent'
+                                            ? 'bg-white text-gray-800'
+                                            : 'bg-green-500 text-white'
                                     }`}
                                 >
-                                    <div className="text-sm">{message.text}</div>
-                                    <div className={`text-xs mt-1 ${
-                                        message.sender === 'user' ? 'text-gray-100' : 'text-gray-500'
-                                    }`}>
-                                        {message.time}
-                                    </div>
+                                    {message.text}
                                 </div>
                             </div>
                         ))}
+                        {isTyping && (
+                            <div className="flex justify-end">
+                                <div className="max-w-[70%] rounded-lg p-3 bg-gray-200">
+                                    Typing...
+                                </div>
+                            </div>
+                        )}
                     </div>
-
-                    {/* Message Input */}
                     <div className="p-4 border-t">
-                        <div className="flex items-end gap-2">
-                            <div className="relative">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                    className="hidden"
-                                    id="image-upload"
-                                />
-                                <label 
-                                    htmlFor="image-upload"
-                                    className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 cursor-pointer transition-colors"
-                                >
-                                    <svg viewBox="0 0 24 24" width="24" height="24" className="text-gray-500">
-                                        <path 
-                                            fill="currentColor" 
-                                            d="M21.317 4.381H10.971L9.078 2.45c-.246-.251-.736-.457-1.089-.457H4.905c-.352 0-.837.211-1.078.468L1.201 5.272C.96 5.529.75 6.028.75 6.38v13.726c0 .352.21.644.463.644h20.104c.253 0 .463-.292.463-.644V4.381zM20.5 19.5h-17V7.375l1.406-1.423h14.188l1.406 1.423V19.5zM12 8.375c-1.875 0-3.375 1.5-3.375 3.375s1.5 3.375 3.375 3.375 3.375-1.5 3.375-3.375-1.5-3.375-3.375-3.375z"
-                                        />
-                                    </svg>
-                                </label>
-                            </div>
-                            <div className="flex-1">
-                                <Input.TextArea
-                                    placeholder="Type a message..."
-                                    autoSize={{ minRows: 1, maxRows: 4 }}
-                                    className="rounded-lg"
-                                    value={messageInput}
-                                    onChange={(e) => setMessageInput(e.target.value)}
-                                    onPressEnter={(e) => {
-                                        if (!e.shiftKey) {
-                                            e.preventDefault();
-                                            handleSendMessage();
-                                        }
-                                    }}
-                                />
-                            </div>
-                            <Button
-                                type="primary"
-                                className="flex items-center justify-center"
+                        <div className="flex gap-2">
+                            <Input
+                                value={messageInput}
+                                onChange={(e) => setMessageInput(e.target.value)}
+                                onPressEnter={handleSendMessage}
+                                placeholder="Type a message..."
+                            />
+                            <Button 
+                                type="primary" 
+                                onClick={handleSendMessage}
                                 style={{ 
                                     backgroundColor: '#25D366',
-                                    borderColor: '#25D366',
-                                    width: '40px',
-                                    height: '40px',
-                                    padding: 0
+                                    borderColor: '#25D366'
                                 }}
-                                onClick={handleSendMessage}
-                                icon={
-                                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                                    </svg>
-                                }
-                            />
+                            >
+                                Send
+                            </Button>
                         </div>
                     </div>
                 </div>

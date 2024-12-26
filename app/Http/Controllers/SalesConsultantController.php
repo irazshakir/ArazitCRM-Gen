@@ -2,19 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SalesConsultant;
-use App\Models\Lead;
-use App\Http\Requests\StoreSalesConsultantRequest;
-use App\Http\Requests\UpdateSalesConsultantRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Models\User;
+use App\Models\Lead;
+use App\Models\Product;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-use App\Models\Product;
-use App\Events\LeadUpdated;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateLeadRequest;
+use App\Http\Requests\StoreLeadRequest;
+use App\Events\LeadCreated;
+use App\Models\User as UserModel;
+use App\Models\SalesConsultant;
+use Carbon\Carbon;
+use App\Events\LeadUpdated;
+use App\Http\Requests\UpdateSalesConsultantRequest;
+use App\Http\Requests\StoreSalesConsultantRequest;
 
 class SalesConsultantController extends Controller
 {
@@ -51,12 +55,13 @@ class SalesConsultantController extends Controller
                             $query->whereBetween('followup_date', [now()->startOfWeek(), now()->endOfWeek()]);
                             break;
                         case 'month':
-                            $query->whereMonth('followup_date', now()->month)
-                                ->whereYear('followup_date', now()->year);
+                            $query->whereBetween('followup_date', [now()->startOfMonth(), now()->endOfMonth()]);
                             break;
                         case 'overdue':
                             $query->where('followup_date', '<', today())
-                                ->where('updated_at', '<', today());
+                                ->where('lead_status', '!=', 'Won')
+                                ->where('lead_status', '!=', 'Lost')
+                                ->where('lead_active_status', true);
                             break;
                     }
                 })
@@ -85,21 +90,38 @@ class SalesConsultantController extends Controller
                 return $lead;
             });
 
+            // Get all active users for lead assignment
+            $users = UserModel::whereRaw('is_active = true')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
+            // Define lead constants using the Lead model constants
+            $leadConstants = [
+                'SOURCES' => Lead::LEAD_SOURCES,
+                'STATUSES' => Lead::STATUSES,
+                'CITIES' => Lead::CITIES,
+            ];
+
             return Inertia::render('SalesConsultant/SCLeadIndex', [
                 'auth' => [
                     'user' => Auth::user()
                 ],
                 'leads' => $leads,
-                'filters' => $request->all([
+                'filters' => $request->only([
                     'search',
                     'lead_status',
                     'lead_source',
-                    'lead_active_status',
                     'followup_filter',
+                    'lead_active_status',
                     'product_id',
                     'notification_status',
                     'per_page'
-                ])
+                ]),
+                'products' => Product::whereRaw('active_status = true')
+                    ->orderBy('name')
+                    ->get(['id', 'name']),
+                'leadConstants' => $leadConstants,
+                'users' => $users,
             ]);
         } catch (\Exception $e) {
             return back()->withError($e->getMessage());
@@ -115,11 +137,40 @@ class SalesConsultantController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created lead for sales consultant.
      */
-    public function store(StoreSalesConsultantRequest $request)
+    public function store(StoreLeadRequest $request)
     {
-        //
+        try {
+            $validated = $request->validated();
+            
+            // Create the lead with explicit boolean using DB::raw
+            $lead = Lead::create([
+                'name' => $validated['name'],
+                'phone' => $validated['phone'],
+                'assigned_user_id' => $validated['assigned_user_id'],
+                'lead_source' => $validated['lead_source'],
+                'lead_status' => $validated['lead_status'] ?? 'Query',
+                'initial_remarks' => $validated['initial_remarks'] ?? null,
+                'followup_date' => $validated['followup_date'] ?? null,
+                'followup_hour' => $validated['followup_hour'] ?? null,
+                'followup_minute' => $validated['followup_minute'] ?? null,
+                'followup_period' => $validated['followup_period'] ?? null,
+                'lead_active_status' => DB::raw('true'),  // Use DB::raw for boolean
+                'notification_status' => DB::raw('false'),  // Set to false for new leads
+                'product_id' => $validated['product_id'] ?? null,
+                'email' => $validated['email'] ?? $validated['phone'] . '@test.com',
+                'city' => $validated['city'] ?? 'Others',
+                'assigned_at' => now(),
+            ]);
+
+            // Broadcast the event
+            event(new LeadCreated($lead));
+
+            return redirect()->back()->with('success', 'Lead created successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()->withErrors(['error' => 'Failed to create lead. ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -151,7 +202,7 @@ class SalesConsultantController extends Controller
                 'notes.user',
                 'documents.user'
             ]),
-            'users' => User::whereRaw('is_active = true')->get(['id', 'name']),
+            'users' => UserModel::whereRaw('is_active = true')->get(['id', 'name']),
             'leadConstants' => [
                 'STATUSES' => Lead::STATUSES,
                 'SOURCES' => Lead::LEAD_SOURCES,

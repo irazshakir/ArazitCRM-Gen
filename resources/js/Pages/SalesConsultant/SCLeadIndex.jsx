@@ -7,14 +7,16 @@ import Pusher from 'pusher-js';
 import { notification } from 'antd';
 import dayjs from 'dayjs';
 import axios from 'axios';
+import SCLeadCreate from './SCLeadCreate';
 
-export default function SCLeadIndex({ auth, leads, filters, products }) {
+export default function SCLeadIndex({ auth, leads, leadConstants, filters, products, users }) {
     // Add error boundary
     if (!auth?.user) {
         return <div>Loading...</div>;
     }
 
     const [loading, setLoading] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [showFilterDrawer, setShowFilterDrawer] = useState(false);
     const [form] = Form.useForm();
 
@@ -256,50 +258,65 @@ export default function SCLeadIndex({ auth, leads, filters, products }) {
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div className="p-6 text-gray-900">
-                            <div className="flex justify-between items-center mb-6">
-                                <div className="flex items-center space-x-4">
+                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center space-x-4">
+                                <Button
+                                    type="primary"
+                                    onClick={() => setShowCreateModal(true)}
+                                    style={{
+                                        backgroundColor: '#a92479',
+                                        borderColor: '#a92479'
+                                    }}
+                                >
+                                    Create Lead
+                                </Button>
+                                <Button
+                                    icon={<FilterOutlined />}
+                                    onClick={() => setShowFilterDrawer(true)}
+                                    style={{
+                                        borderColor: hasActiveFilters ? '#a92479' : undefined,
+                                        color: hasActiveFilters ? '#a92479' : undefined
+                                    }}
+                                >
+                                    Filters {hasActiveFilters && '(Active)'}
+                                </Button>
+                                {hasActiveFilters && (
                                     <Button
-                                        icon={<FilterOutlined />}
-                                        onClick={() => setShowFilterDrawer(true)}
-                                        type={hasActiveFilters ? 'primary' : 'default'}
+                                        icon={<ClearOutlined />}
+                                        onClick={clearFilters}
+                                        style={{
+                                            borderColor: '#a92479',
+                                            color: '#a92479'
+                                        }}
                                     >
-                                        Filter
+                                        Clear Filters
                                     </Button>
-                                    {hasActiveFilters && (
-                                        <Button
-                                            icon={<ClearOutlined />}
-                                            onClick={clearFilters}
-                                        >
-                                            Clear Filters
-                                        </Button>
-                                    )}
-                                </div>
+                                )}
                             </div>
-
-                            <Table
-                                columns={columns}
-                                dataSource={leads.data}
-                                rowKey="id"
-                                pagination={{
-                                    total: leads.total,
-                                    pageSize: leads.per_page,
-                                    current: leads.current_page,
-                                    onChange: (page) => {
-                                        router.get(
-                                            route('sales-consultant.leads.index'),
-                                            { page },
-                                            {
-                                                preserveState: true,
-                                                preserveScroll: true,
-                                                only: ['leads'],
-                                            }
-                                        );
-                                    },
-                                }}
-                            />
                         </div>
+
+                        <Table
+                            columns={columns}
+                            dataSource={leads.data}
+                            rowKey="id"
+                            pagination={{
+                                total: leads.total,
+                                pageSize: leads.per_page,
+                                current: leads.current_page,
+                                onChange: (page) => {
+                                    router.get(
+                                        route('sales-consultant.leads.index'),
+                                        { page },
+                                        {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                            only: ['leads'],
+                                        }
+                                    );
+                                },
+                            }}
+                        />
                     </div>
                 </div>
             </div>
@@ -313,8 +330,8 @@ export default function SCLeadIndex({ auth, leads, filters, products }) {
             >
                 <Form
                     form={form}
-                    layout="vertical"
                     onFinish={handleFilter}
+                    layout="vertical"
                     initialValues={filters}
                 >
                     <Form.Item name="search" label="Search">
@@ -402,6 +419,14 @@ export default function SCLeadIndex({ auth, leads, filters, products }) {
                     </Form.Item>
                 </Form>
             </Drawer>
+
+            <SCLeadCreate 
+                show={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                leadConstants={leadConstants}
+                products={products}
+                users={users}
+            />
         </AuthenticatedLayout>
     );
 }

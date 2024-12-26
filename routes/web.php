@@ -111,6 +111,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return $next($request);
     }, 'prefix' => 'sales-consultant'], function () {
         Route::get('leads', [SalesConsultantController::class, 'index'])->name('sales-consultant.leads.index');
+        Route::post('leads', [SalesConsultantController::class, 'store'])->name('sales-consultant.leads.store');
         Route::get('leads/{lead}/edit', [SalesConsultantController::class, 'edit'])->name('sales-consultant.leads.edit');
         Route::put('leads/{lead}', [SalesConsultantController::class, 'update'])->name('sales-consultant.leads.update');
         // Add other sales consultant routes as needed

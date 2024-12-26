@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateUserRequest;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -27,7 +28,8 @@ class UserController extends Controller
         $validated = $request->validated();
         $validated['password'] = Hash::make($validated['password']);
         
-        $validated['is_active'] = $request->boolean('is_active');
+        // Use DB::raw for boolean value
+        $validated['is_active'] = DB::raw($request->has('is_active') ? 'true' : 'false');
         
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('users', 'public');
