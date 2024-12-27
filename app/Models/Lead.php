@@ -144,4 +144,12 @@ class Lead extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    /**
+     * Get all activity logs for this lead.
+     */
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(LeadActivityLog::class)->orderBy('created_at', 'desc');
+    }
 }

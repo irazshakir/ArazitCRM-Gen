@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Lead;
+use App\Policies\LeadPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 
@@ -13,7 +15,7 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
-        //
+        Lead::class => LeadPolicy::class,
     ];
 
     /**
@@ -23,4 +25,4 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
     }
-} 
+}

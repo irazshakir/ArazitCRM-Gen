@@ -16,6 +16,8 @@ class LeadActivityLog extends Model
 
     protected $casts = [
         'activity_details' => 'array',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
     /**

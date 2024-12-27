@@ -21,6 +21,7 @@ use App\Models\User as UserModel;
 use App\Models\SalesConsultant;
 use Carbon\Carbon;
 use App\Traits\LogsLeadActivity;
+use Illuminate\Support\Facades\Gate;
 
 class SalesConsultantController extends Controller
 {
@@ -124,59 +125,36 @@ class SalesConsultantController extends Controller
     public function store(StoreLeadRequest $request)
     {
         try {
-            $data = $request->validated();
+            DB::beginTransaction();
+
+            $validated = $request->validated();
             
-            $lead = DB::table('leads')->insertGetId([
-                'name' => DB::raw("'" . pg_escape_string($data['name']) . "'"),
-                'phone' => DB::raw("'" . pg_escape_string($data['phone']) . "'"),
-                'email' => DB::raw("'" . pg_escape_string($data['phone'] . '@test.com') . "'"),
-                'assigned_user_id' => intval($data['assigned_user_id']),
-                'lead_source' => DB::raw("'" . pg_escape_string($data['lead_source']) . "'"),
-                'lead_status' => DB::raw("'" . pg_escape_string($data['lead_status']) . "'"),
-                'initial_remarks' => isset($data['initial_remarks']) ? DB::raw("'" . pg_escape_string($data['initial_remarks']) . "'") : null,
-                'followup_date' => isset($data['followup_date']) ? DB::raw("'" . $data['followup_date'] . "'") : null,
-                'followup_hour' => !empty($data['followup_hour']) ? DB::raw("'" . pg_escape_string($data['followup_hour']) . "'") : null,
-                'followup_minute' => !empty($data['followup_minute']) ? DB::raw("'" . pg_escape_string($data['followup_minute']) . "'") : null,
-                'followup_period' => !empty($data['followup_period']) ? DB::raw("'" . pg_escape_string($data['followup_period']) . "'") : null,
-                'lead_active_status' => DB::raw('true'),
-                'product_id' => isset($data['product_id']) ? intval($data['product_id']) : null,
-                'created_by' => intval(Auth::id()),
-                'notification_status' => DB::raw('false'),
-                'city' => DB::raw("'Others'"),
-                'assigned_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $lead = Lead::find($lead);
-
-            $this->logLeadActivity($lead->id, 'lead_created', [
-                'name' => $lead->name,
-                'email' => $lead->email ?? null,
-                'phone' => $lead->phone,
-                'source' => $lead->lead_source
-            ]);
-
-            if (!empty($data['initial_remarks'])) {
-                $this->logLeadActivity($lead->id, 'note_added', [
-                    'note' => $data['initial_remarks']
-                ]);
+            if ($validated['followup_date']) {
+                $validated['followup_date'] = Carbon::parse($validated['followup_date'])->format('Y-m-d');
             }
 
-            if (!empty($data['followup_date'])) {
-                $this->logLeadActivity($lead->id, 'followup_scheduled', [
-                    'date' => $data['followup_date'],
-                    'hour' => $data['followup_hour'],
-                    'minute' => $data['followup_minute'],
-                    'period' => $data['followup_period']
-                ]);
-            }
+            $lead = Lead::create($validated);
 
-            event(new LeadCreated($lead));
+            // Log lead creation
+            LeadActivityLog::create([
+                'lead_id' => $lead->id,
+                'user_id' => auth()->id(),
+                'activity_type' => 'lead_created',
+                'activity_details' => [
+                    'name' => $lead->name,
+                    'email' => $lead->email,
+                    'phone' => $lead->phone,
+                    'lead_source' => $lead->lead_source,
+                    'assigned_to' => UserModel::find($lead->assigned_user_id)->name
+                ]
+            ]);
 
-            return redirect()->back()->with('success', 'Lead created successfully.');
+            DB::commit();
+            return redirect()->route('sales-consultant.leads.index')->with('success', 'Lead created successfully');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Error creating lead. Please try again.');
+            DB::rollBack();
+            Log::error('Lead creation error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to create lead');
         }
     }
 
@@ -193,31 +171,23 @@ class SalesConsultantController extends Controller
      */
     public function edit(Lead $lead)
     {
-        // Check if the lead is assigned to the current user
-        if ($lead->assigned_user_id !== Auth::id()) {
+        if (!auth()->user()->can('view', $lead)) {
             abort(403, 'Unauthorized action.');
         }
 
-        // Mark the lead as viewed (notification_status = true)
-        $lead->update([
-            'notification_status' => DB::raw('true')
-        ]);
-
         return Inertia::render('SalesConsultant/SCLeadEdit', [
-            'lead' => $lead->load([
-                'assignedUser',
-                'notes.user',
-                'documents.user'
-            ]),
-            'users' => UserModel::whereRaw('is_active = true')->get(['id', 'name']),
+            'lead' => $lead->load(['assignedUser', 'product', 'activityLogs' => function($query) {
+                $query->with('user')->latest();
+            }]),
+            'users' => UserModel::where('role', 'sales-consultant')
+                               ->whereRaw('is_active = true')
+                               ->get(),
             'leadConstants' => [
-                'STATUSES' => Lead::STATUSES,
-                'SOURCES' => Lead::LEAD_SOURCES,
-                'CITIES' => Lead::CITIES,
+                'STATUSES' => config('constants.lead.STATUSES'),
+                'SOURCES' => config('constants.lead.SOURCES'),
+                'CITIES' => config('constants.lead.CITIES'),
             ],
-            'products' => Product::whereRaw('active_status = true')
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            'products' => Product::all(),
         ]);
     }
 
@@ -226,99 +196,78 @@ class SalesConsultantController extends Controller
      */
     public function update(UpdateLeadRequest $request, Lead $lead)
     {
+        if (!auth()->user()->can('update', $lead)) {
+            abort(403, 'Unauthorized action.');
+        }
+
         try {
-            $data = $request->validated();
-            $originalLead = $lead->toArray();
-            
-            // Don't allow changing the creator
-            unset($data['created_by']);
-            
-            // Check for assignment change
-            if (isset($data['assigned_user_id']) && $lead->assigned_user_id !== $data['assigned_user_id']) {
-                $this->logLeadActivity($lead->id, 'lead_assigned', [
-                    'from_user_id' => $lead->assigned_user_id,
-                    'to_user_id' => $data['assigned_user_id']
-                ]);
+            DB::beginTransaction();
+
+            $oldValues = $lead->getOriginal();
+            $validated = $request->validated();
+
+            // Handle followup datetime
+            if ($validated['followup_date']) {
+                $validated['followup_date'] = Carbon::parse($validated['followup_date'])->format('Y-m-d');
             }
 
-            // Check for status change
-            if (isset($data['lead_status']) && $lead->lead_status !== $data['lead_status']) {
-                $this->logLeadActivity($lead->id, 'status_updated', [
-                    'from_status' => $lead->lead_status,
-                    'to_status' => $data['lead_status']
-                ]);
+            // Update the lead
+            $lead->update($validated);
 
-                // Special handling for Won status
-                if ($data['lead_status'] === 'Won') {
-                    $data['won_at'] = now();
-                    $this->logLeadActivity($lead->id, 'lead_won');
-                }
-            }
+            // Log changes in fields
+            $fieldsToTrack = [
+                'name', 'email', 'phone', 'lead_source', 'lead_status', 
+                'lead_active_status', 'product_id', 'assigned_user_id'
+            ];
 
-            // Check for active status change
-            if (isset($data['lead_active_status'])) {
-                $newActiveStatus = filter_var($data['lead_active_status'], FILTER_VALIDATE_BOOLEAN);
-                if ($lead->lead_active_status !== $newActiveStatus) {
-                    if (!$newActiveStatus) {
-                        $data['closed_at'] = now();
-                        $this->logLeadActivity($lead->id, 'lead_closed');
-                    }
-                }
-                // Remove from the data array since we'll update it directly
-                unset($data['lead_active_status']);
-                
-                // Update the lead_active_status directly using DB::update
-                DB::table('leads')
-                    ->where('id', $lead->id)
-                    ->update([
-                        'lead_active_status' => DB::raw($newActiveStatus ? 'true' : 'false')
-                    ]);
-            }
-
-            // Check for followup changes
-            if (isset($data['followup_date']) && 
-                ($lead->followup_date != $data['followup_date'] ||
-                $lead->followup_hour != $data['followup_hour'] ||
-                $lead->followup_minute != $data['followup_minute'] ||
-                $lead->followup_period != $data['followup_period'])) {
-                
-                $this->logLeadActivity($lead->id, 'followup_scheduled', [
-                    'date' => $data['followup_date'],
-                    'hour' => $data['followup_hour'],
-                    'minute' => $data['followup_minute'],
-                    'period' => $data['followup_period']
-                ]);
-            }
-
-            // Log any other field changes
-            $fieldsToTrack = ['name', 'email', 'phone', 'city', 'lead_source', 'product_id'];
-            $changedFields = [];
             foreach ($fieldsToTrack as $field) {
-                if (isset($data[$field]) && $lead->$field !== $data[$field]) {
-                    $changedFields[$field] = [
-                        'from' => $lead->$field,
-                        'to' => $data[$field]
-                    ];
+                if (isset($validated[$field]) && $validated[$field] != $oldValues[$field]) {
+                    LeadActivityLog::create([
+                        'lead_id' => $lead->id,
+                        'user_id' => auth()->id(),
+                        'activity_type' => 'field_updated',
+                        'activity_details' => [
+                            'field' => $field,
+                            'old' => $oldValues[$field],
+                            'new' => $validated[$field]
+                        ]
+                    ]);
                 }
             }
-            
-            if (!empty($changedFields)) {
-                $this->logLeadActivity($lead->id, 'field_updated', [
-                    'changes' => $changedFields
+
+            // Log followup changes
+            if (isset($validated['followup_date']) && 
+                ($validated['followup_date'] != $oldValues['followup_date'] ||
+                $validated['followup_hour'] != $oldValues['followup_hour'] ||
+                $validated['followup_minute'] != $oldValues['followup_minute'])) {
+                
+                LeadActivityLog::create([
+                    'lead_id' => $lead->id,
+                    'user_id' => auth()->id(),
+                    'activity_type' => 'followup_scheduled',
+                    'activity_details' => [
+                        'old_date' => $oldValues['followup_date'],
+                        'new_date' => $validated['followup_date'],
+                        'old_time' => sprintf('%02d:%02d %s', 
+                            $oldValues['followup_hour'], 
+                            $oldValues['followup_minute'],
+                            $oldValues['followup_period']
+                        ),
+                        'new_time' => sprintf('%02d:%02d %s', 
+                            $validated['followup_hour'], 
+                            $validated['followup_minute'],
+                            $validated['followup_period']
+                        )
+                    ]
                 ]);
             }
 
-            // Update other fields
-            if (!empty($data)) {
-                $lead->update($data);
-            }
-
-            event(new LeadUpdated($lead));
-
-            return redirect()->back()->with('success', 'Lead updated successfully.');
+            DB::commit();
+            return redirect()->back()->with('success', 'Lead updated successfully');
         } catch (\Exception $e) {
-            Log::error('Error updating lead: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error updating lead. Please try again.');
+            DB::rollBack();
+            Log::error('Lead update error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to update lead');
         }
     }
 
