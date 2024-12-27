@@ -35,7 +35,7 @@ class UpdateLeadRequest extends FormRequest
             'followup_hour' => 'nullable|string',
             'followup_minute' => 'nullable|string',
             'followup_period' => 'nullable|in:AM,PM',
-            'lead_active_status' => 'required|in:true,false',
+            'lead_active_status' => 'required|boolean',
             'product_id' => 'nullable|exists:products,id',
         ];
     }

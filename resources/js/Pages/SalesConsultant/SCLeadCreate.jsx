@@ -9,7 +9,7 @@ export default function SCLeadCreate({ show, onClose, leadConstants, products = 
     const [form, setForm] = useState({
         name: '',
         phone: '',
-        assigned_user_id: '',
+        assigned_user_id: users.length > 0 ? users[0].id : '',
         lead_source: 'Facebook',
         lead_status: 'Query',
         followup_date: '',
@@ -105,7 +105,7 @@ export default function SCLeadCreate({ show, onClose, leadConstants, products = 
                 setForm({
                     name: '',
                     phone: '',
-                    assigned_user_id: '',
+                    assigned_user_id: users.length > 0 ? users[0].id : '',
                     lead_source: 'Facebook',
                     lead_status: 'Query',
                     followup_date: '',

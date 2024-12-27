@@ -32,9 +32,34 @@ class Lead extends Model
     protected $casts = [
         'lead_active_status' => 'boolean',
         'notification_status' => 'boolean',
+        'name' => 'string',
+        'phone' => 'string',
+        'email' => 'string',
+        'city' => 'string',
+        'lead_source' => 'string',
+        'lead_status' => 'string',
+        'initial_remarks' => 'string',
         'followup_date' => 'datetime',
+        'followup_hour' => 'string',
+        'followup_minute' => 'string',
+        'followup_period' => 'string',
+        'assigned_user_id' => 'integer',
+        'created_by' => 'integer',
+        'product_id' => 'integer',
         'won_at' => 'datetime',
         'closed_at' => 'datetime',
+    ];
+
+    protected $attributes = [
+        'followup_hour' => null,
+        'followup_minute' => null,
+        'followup_period' => null,
+        'initial_remarks' => null,
+        'email' => null,
+        'city' => null,
+        'product_id' => null,
+        'won_at' => null,
+        'closed_at' => null
     ];
 
     // Define constants for validation

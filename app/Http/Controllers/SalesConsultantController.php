@@ -32,11 +32,6 @@ class SalesConsultantController extends Controller
     public function index(Request $request)
     {
         try {
-            \Log::info('Request parameters:', [
-                'show_overdue' => $request->show_overdue,
-                'all_parameters' => $request->all()
-            ]);
-
             $query = Lead::query()
                 ->with(['product', 'assignedUser'])
                 ->where('assigned_user_id', auth()->id())
@@ -60,36 +55,25 @@ class SalesConsultantController extends Controller
                     $query->whereRaw('notification_status = ?', [($request->notification_status === '1') ? 'true' : 'false']);
                 })
                 ->when($request->show_overdue == true, function ($query) {
-                    // Set timezone to Pacific Time
                     $now = now()->setTimezone('America/Los_Angeles');
                     $currentDate = $now->format('Y-m-d');
                     
-                    \Log::info('Filtering overdue leads', [
-                        'current_date' => $currentDate,
-                        'current_time' => $now->format('g:i A'),
-                        'timezone' => $now->tzName
-                    ]);
-
                     return $query->where(function ($q) use ($currentDate, $now) {
-                        // Past dates
                         $q->where(function ($dateCheck) use ($currentDate) {
                             $dateCheck->whereDate('followup_date', '<', $currentDate)
-                                ->whereRaw('lead_active_status = true') // Fix boolean comparison
+                                ->whereRaw('lead_active_status = true')
                                 ->whereNotIn('lead_status', ['Won', 'Lost']);
                         });
 
-                        // Same day, check time
                         $q->orWhere(function ($sameDay) use ($currentDate, $now) {
                             $sameDay->whereDate('followup_date', '=', $currentDate)
-                                ->whereRaw('lead_active_status = true') // Fix boolean comparison
+                                ->whereRaw('lead_active_status = true')
                                 ->whereNotIn('lead_status', ['Won', 'Lost'])
                                 ->where(function ($timeCheck) use ($now) {
-                                    // Convert followup time to minutes since midnight for comparison
                                     $currentMinutes = $now->hour * 60 + $now->minute;
                                     
                                     $timeCheck->whereRaw("
                                         (
-                                            -- Convert AM/PM time to 24-hour for comparison
                                             (CASE 
                                                 WHEN followup_period = 'AM' AND CAST(followup_hour AS INTEGER) = 12 
                                                     THEN 0 
@@ -99,68 +83,30 @@ class SalesConsultantController extends Controller
                                                     THEN 12
                                                 ELSE CAST(followup_hour AS INTEGER) + 12 
                                             END) * 60 + CAST(followup_minute AS INTEGER)
-                                        ) < ?
-                                    ", [$currentMinutes]);
+                                        ) < ?", [$currentMinutes]
+                                    );
                                 });
                         });
-                    })
-                    ->whereNotNull('followup_date')
-                    ->whereNotNull('followup_hour')
-                    ->whereNotNull('followup_minute')
-                    ->whereNotNull('followup_period');
+                    });
                 });
 
-            // Log the generated SQL query
-            \Log::info('Generated SQL:', [
-                'sql' => $query->toSql(),
-                'bindings' => $query->getBindings()
-            ]);
+            $perPage = $request->input('per_page', 10);
+            $leads = $query->latest()->paginate($perPage);
 
-            $leads = $query
-                ->orderByDesc('lead_active_status')
-                ->orderBy('followup_date')
-                ->orderBy(DB::raw("CASE 
-                    WHEN followup_period = 'AM' THEN 1 
-                    WHEN followup_period = 'PM' THEN 2 
-                    ELSE 3 
-                END"))
-                ->orderBy('followup_hour')
-                ->orderBy('followup_minute')
-                ->paginate($request->per_page ?? 10)
-                ->withQueryString();
-
-            return inertia('SalesConsultant/SCLeadIndex', [
+            return Inertia::render('SalesConsultant/SCLeadIndex', [
                 'leads' => $leads,
+                'filters' => $request->all(['search', 'lead_status', 'lead_source', 'show_overdue']),
                 'leadConstants' => [
-                    'statuses' => Lead::STATUSES,
                     'sources' => Lead::LEAD_SOURCES,
-                    'cities' => Lead::CITIES,
+                    'statuses' => Lead::STATUSES,
                 ],
-                'filters' => $request->only([
-                    'search',
-                    'lead_status',
-                    'lead_source',
-                    'followup_filter',
-                    'lead_active_status',
-                    'product_id',
-                    'notification_status',
-                    'per_page',
-                    'followup_date_range',
-                    'show_overdue'
-                ]),
-                'products' => Product::whereRaw('active_status = true')
-                    ->orderBy('name')
-                    ->get(['id', 'name']),
-                'users' => UserModel::where('role', 'sales-consultant')
-                    ->orderBy('name')
+                'products' => Product::all(['id', 'name']),
+                'users' => UserModel::whereRaw('is_active = true')
+                    ->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [Auth::id()])
                     ->get(['id', 'name'])
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error in leads index:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            throw $e;
+            return redirect()->back()->with('error', 'Error fetching leads. Please try again.');
         }
     }
 
@@ -179,29 +125,44 @@ class SalesConsultantController extends Controller
     {
         try {
             $data = $request->validated();
-            $data['created_by'] = Auth::id();
-            $data['assigned_user_id'] = Auth::id(); // Sales consultant creates leads for themselves
-            $data['lead_active_status'] = true;
-            $data['notification_status'] = false;
+            
+            $lead = DB::table('leads')->insertGetId([
+                'name' => DB::raw("'" . pg_escape_string($data['name']) . "'"),
+                'phone' => DB::raw("'" . pg_escape_string($data['phone']) . "'"),
+                'email' => DB::raw("'" . pg_escape_string($data['phone'] . '@test.com') . "'"),
+                'assigned_user_id' => intval($data['assigned_user_id']),
+                'lead_source' => DB::raw("'" . pg_escape_string($data['lead_source']) . "'"),
+                'lead_status' => DB::raw("'" . pg_escape_string($data['lead_status']) . "'"),
+                'initial_remarks' => isset($data['initial_remarks']) ? DB::raw("'" . pg_escape_string($data['initial_remarks']) . "'") : null,
+                'followup_date' => isset($data['followup_date']) ? DB::raw("'" . $data['followup_date'] . "'") : null,
+                'followup_hour' => !empty($data['followup_hour']) ? DB::raw("'" . pg_escape_string($data['followup_hour']) . "'") : null,
+                'followup_minute' => !empty($data['followup_minute']) ? DB::raw("'" . pg_escape_string($data['followup_minute']) . "'") : null,
+                'followup_period' => !empty($data['followup_period']) ? DB::raw("'" . pg_escape_string($data['followup_period']) . "'") : null,
+                'lead_active_status' => DB::raw('true'),
+                'product_id' => isset($data['product_id']) ? intval($data['product_id']) : null,
+                'created_by' => intval(Auth::id()),
+                'notification_status' => DB::raw('false'),
+                'city' => DB::raw("'Others'"),
+                'assigned_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-            $lead = Lead::create($data);
+            $lead = Lead::find($lead);
 
-            // Log lead creation
             $this->logLeadActivity($lead->id, 'lead_created', [
                 'name' => $lead->name,
-                'email' => $lead->email,
+                'email' => $lead->email ?? null,
                 'phone' => $lead->phone,
                 'source' => $lead->lead_source
             ]);
 
-            // Log initial remarks if provided
             if (!empty($data['initial_remarks'])) {
                 $this->logLeadActivity($lead->id, 'note_added', [
                     'note' => $data['initial_remarks']
                 ]);
             }
 
-            // Log followup schedule if provided
             if (!empty($data['followup_date'])) {
                 $this->logLeadActivity($lead->id, 'followup_scheduled', [
                     'date' => $data['followup_date'],
@@ -215,7 +176,6 @@ class SalesConsultantController extends Controller
 
             return redirect()->back()->with('success', 'Lead created successfully.');
         } catch (\Exception $e) {
-            Log::error('Error creating lead: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error creating lead. Please try again.');
         }
     }
@@ -304,6 +264,15 @@ class SalesConsultantController extends Controller
                         $this->logLeadActivity($lead->id, 'lead_closed');
                     }
                 }
+                // Remove from the data array since we'll update it directly
+                unset($data['lead_active_status']);
+                
+                // Update the lead_active_status directly using DB::update
+                DB::table('leads')
+                    ->where('id', $lead->id)
+                    ->update([
+                        'lead_active_status' => DB::raw($newActiveStatus ? 'true' : 'false')
+                    ]);
             }
 
             // Check for followup changes
@@ -339,7 +308,10 @@ class SalesConsultantController extends Controller
                 ]);
             }
 
-            $lead->update($data);
+            // Update other fields
+            if (!empty($data)) {
+                $lead->update($data);
+            }
 
             event(new LeadUpdated($lead));
 

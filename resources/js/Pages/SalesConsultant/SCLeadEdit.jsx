@@ -20,7 +20,7 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants, products 
         followup_hour: lead.followup_hour || null,
         followup_minute: lead.followup_minute || null,
         followup_period: lead.followup_period || null,
-        lead_active_status: String(lead.lead_active_status) === 'true',
+        lead_active_status: Boolean(lead.lead_active_status),
         product_id: lead.product_id || null,
     });
 
@@ -57,8 +57,8 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants, products 
             formData.followup_date = formData.followup_date.format('YYYY-MM-DD');
         }
 
-        // Convert boolean to string 'true'/'false' for PostgreSQL
-        formData.lead_active_status = formData.lead_active_status ? 'true' : 'false';
+        // Ensure lead_active_status is a proper boolean
+        formData.lead_active_status = formData.lead_active_status === true;
 
         formData.followup_hour = formData.followup_hour?.toString() || null;
         formData.followup_minute = formData.followup_minute?.toString() || null;
