@@ -63,7 +63,8 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants = {}, prod
         return dayjs().hour(hour24).minute(minute);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = (e) => {
+        e.preventDefault();
         const formData = { ...form };
         
         if (formData.followup_date) {
@@ -113,7 +114,6 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants = {}, prod
         const file = e.target.files[0];
         if (file) {
             // Handle image upload logic here
-            console.log('Image selected:', file);
         }
     };
 

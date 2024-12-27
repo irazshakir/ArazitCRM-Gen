@@ -285,28 +285,37 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
 
     const handleFilter = (values) => {
         setLoading(true);
-        console.log('Filter values:', values); // Add logging
         
-        // Remove empty values
+        // Remove empty values and format date range
         const cleanValues = Object.fromEntries(
             Object.entries(values).filter(([key, value]) => {
                 if (Array.isArray(value)) {
                     return value.length > 0;
                 }
-                // Special handling for boolean values
+                // Special handling for boolean values and date range
                 if (key === 'show_overdue') {
-                    return true; // Always include show_overdue
+                    return true; // Always include show_overdue even if false
+                }
+                if (key === 'lead_active_status') {
+                    return value !== undefined && value !== null && value !== '';
+                }
+                if (key === 'followup_date_range' && value) {
+                    return value[0] && value[1];
                 }
                 return value !== undefined && value !== null && value !== '';
             })
         );
 
-        // Ensure show_overdue is properly passed as a boolean
-        if (values.show_overdue !== undefined) {
-            cleanValues.show_overdue = Boolean(values.show_overdue);
+        // Format date range if present
+        if (cleanValues.followup_date_range) {
+            cleanValues.followup_date_range = [
+                cleanValues.followup_date_range[0].format('YYYY-MM-DD'),
+                cleanValues.followup_date_range[1].format('YYYY-MM-DD')
+            ];
         }
-        
-        console.log('Clean values:', cleanValues); // Add logging
+
+        // Ensure show_overdue is properly passed as a string
+        cleanValues.show_overdue = values.show_overdue ? 'true' : 'false';
         
         setActiveFilters(cleanValues);
 
@@ -319,11 +328,9 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                 only: ['leads'],
                 onSuccess: () => {
                     setLoading(false);
-                    console.log('Filter applied successfully'); // Add logging
                 },
-                onError: (error) => {
+                onError: () => {
                     setLoading(false);
-                    console.error('Filter error:', error); // Add logging
                     message.error('Failed to apply filters');
                 }
             }
@@ -366,7 +373,7 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
             summary.push(`Search: ${activeFilters.search}`);
         }
         if (activeFilters.lead_active_status !== undefined) {
-            summary.push(`Status: ${activeFilters.lead_active_status === '1' ? 'Active' : 'Inactive'}`);
+            summary.push(`Status: ${activeFilters.lead_active_status === 'true' ? 'Active' : 'Inactive'}`);
         }
         if (activeFilters.show_overdue) {
             summary.push('Showing Overdue Leads');
@@ -509,8 +516,8 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                             allowClear
                             placeholder="Select active status"
                             options={[
-                                { value: '1', label: 'Active' },
-                                { value: '0', label: 'Inactive' },
+                                { value: 'true', label: 'Active' },
+                                { value: 'false', label: 'Inactive' },
                             ]}
                         />
                     </Form.Item>
@@ -521,8 +528,6 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                             format="YYYY-MM-DD"
                         />
                     </Form.Item>
-
-                   
 
                     <Form.Item name="product_id" label="Product">
                         <Select
@@ -547,8 +552,8 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                     </Form.Item>
 
                     <Form.Item name="show_overdue" valuePropName="checked">
-                        <Checkbox className="custom-checkbox">
-                            <span className="text-md text-red-600 ml-2">
+                        <Checkbox>
+                            <span className="text-md text-red-600">
                                 Show Overdue Leads
                             </span>
                         </Checkbox>

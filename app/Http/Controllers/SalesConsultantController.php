@@ -40,68 +40,84 @@ class SalesConsultantController extends Controller
                     'notes.user',
                     'documents.user'
                 ])
-                ->where('assigned_user_id', auth()->id())
-                ->when($request->search, function ($query, $search) {
-                    $query->where(function ($q) use ($search) {
-                        $q->where('name', 'like', "%{$search}%")
-                            ->orWhere('phone', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%");
-                    });
-                })
-                ->when($request->lead_status, function ($query, $statuses) {
-                    $query->whereIn('lead_status', $statuses);
-                })
-                ->when($request->lead_source, function ($query, $sources) {
-                    $query->whereIn('lead_source', $sources);
-                })
-                ->when($request->product_id, function ($query, $productId) {
-                    $query->where('product_id', $productId);
-                })
-                ->when($request->notification_status !== null, function ($query) use ($request) {
-                    $query->whereRaw('notification_status = ?', [($request->notification_status === '1') ? 'true' : 'false']);
-                })
-                ->when($request->show_overdue == true, function ($query) {
-                    $now = now()->setTimezone('America/Los_Angeles');
-                    $currentDate = $now->format('Y-m-d');
-                    
-                    return $query->where(function ($q) use ($currentDate, $now) {
-                        $q->where(function ($dateCheck) use ($currentDate) {
-                            $dateCheck->whereDate('followup_date', '<', $currentDate)
-                                ->whereRaw('lead_active_status = true')
-                                ->whereNotIn('lead_status', ['Won', 'Lost']);
-                        });
+                ->where('assigned_user_id', auth()->id());
 
-                        $q->orWhere(function ($sameDay) use ($currentDate, $now) {
-                            $sameDay->whereDate('followup_date', '=', $currentDate)
-                                ->whereRaw('lead_active_status = true')
-                                ->whereNotIn('lead_status', ['Won', 'Lost'])
-                                ->where(function ($timeCheck) use ($now) {
-                                    $currentMinutes = $now->hour * 60 + $now->minute;
-                                    
-                                    $timeCheck->whereRaw("
-                                        (
-                                            (CASE 
-                                                WHEN followup_period = 'AM' AND CAST(followup_hour AS INTEGER) = 12 
-                                                    THEN 0 
-                                                WHEN followup_period = 'AM' 
-                                                    THEN CAST(followup_hour AS INTEGER)
-                                                WHEN followup_period = 'PM' AND CAST(followup_hour AS INTEGER) = 12 
-                                                    THEN 12
-                                                ELSE CAST(followup_hour AS INTEGER) + 12 
-                                            END) * 60 + CAST(followup_minute AS INTEGER)
-                                        ) < ?", [$currentMinutes]
-                                    );
-                                });
-                        });
-                    });
+            if ($request->search) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('name', 'like', "%{$request->search}%")
+                        ->orWhere('phone', 'like', "%{$request->search}%")
+                        ->orWhere('email', 'like', "%{$request->search}%");
                 });
+            }
+
+            if ($request->lead_status) {
+                $query->whereIn('lead_status', $request->lead_status);
+            }
+
+            if ($request->lead_source) {
+                $query->whereIn('lead_source', $request->lead_source);
+            }
+
+            if ($request->product_id) {
+                $query->where('product_id', $request->product_id);
+            }
+
+            if ($request->lead_active_status !== null) {
+                $isActive = $request->lead_active_status === 'true';
+                $query->whereRaw('lead_active_status = ?', [$isActive ? 'true' : 'false']);
+            }
+
+            if ($request->notification_status !== null) {
+                $isNotified = $request->notification_status === 'true';
+                $query->whereRaw('notification_status = ?', [$isNotified ? 'true' : 'false']);
+            }
+
+            if ($request->followup_date_range && is_array($request->followup_date_range) && count($request->followup_date_range) === 2) {
+                $query->whereDate('followup_date', '>=', $request->followup_date_range[0])
+                      ->whereDate('followup_date', '<=', $request->followup_date_range[1]);
+            }
+
+            if ($request->show_overdue === 'true') {
+                $currentDate = now()->format('Y-m-d');
+                $query->whereRaw('lead_active_status = true')
+                      ->whereDate('followup_date', '<', $currentDate);
+            }
 
             $perPage = $request->input('per_page', 10);
-            $leads = $query->latest()->paginate($perPage);
+            
+            // Updated sorting logic
+            $query->orderBy('lead_active_status', 'desc') // Active leads first
+                  ->orderByRaw('
+                    CASE 
+                        WHEN followup_date < CURRENT_DATE THEN 1
+                        ELSE 2 
+                    END,
+                    CASE 
+                        WHEN followup_date >= CURRENT_DATE THEN followup_date
+                        ELSE NULL 
+                    END ASC,
+                    CASE 
+                        WHEN followup_date < CURRENT_DATE THEN followup_date
+                        ELSE NULL 
+                    END DESC
+                  ') // Sort dates: overdue desc, future asc
+                  ->orderByRaw('
+                    CASE 
+                        WHEN followup_date = CURRENT_DATE THEN 
+                            (CAST(followup_hour AS INTEGER) + 
+                            CASE 
+                                WHEN followup_period = \'PM\' AND followup_hour != \'12\' THEN 12 
+                                WHEN followup_period = \'AM\' AND followup_hour = \'12\' THEN 0 
+                                ELSE 0 
+                            END) * 60 + CAST(followup_minute AS INTEGER)
+                    END ASC
+                  '); // Sort by time for same day
+
+            $leads = $query->paginate($perPage);
 
             return Inertia::render('SalesConsultant/SCLeadIndex', [
                 'leads' => $leads,
-                'filters' => $request->all(['search', 'lead_status', 'lead_source', 'show_overdue']),
+                'filters' => $request->all(['search', 'lead_status', 'lead_source', 'show_overdue', 'product_id', 'lead_active_status', 'notification_status', 'followup_date_range']),
                 'leadConstants' => [
                     'sources' => Lead::LEAD_SOURCES,
                     'statuses' => Lead::STATUSES,
@@ -139,9 +155,8 @@ class SalesConsultantController extends Controller
                 'city' => 'Others',
                 'lead_source' => 'Facebook',
                 'lead_status' => 'Query',
-                'notification_status' => DB::raw('false'),
                 'created_by' => auth()->id(),
-                'assigned_user_id' => auth()->id(), // Default to current user if not provided
+                'assigned_user_id' => auth()->id(),
             ], $validated);
 
             // Handle followup date formatting
@@ -155,10 +170,15 @@ class SalesConsultantController extends Controller
                 $validated['email'] = $cleanPhone . '@test.com';
             }
 
-            // Ensure boolean fields use DB::raw for PostgreSQL
-            $validated['lead_active_status'] = DB::raw('true');
-
-            $lead = Lead::create($validated);
+            // Create the lead with proper boolean handling for PostgreSQL
+            $lead = new Lead();
+            $lead->fill(array_diff_key($validated, ['lead_active_status' => 1, 'notification_status' => 1]));
+            
+            // Set boolean fields using DB::raw for PostgreSQL
+            $lead->lead_active_status = DB::raw('true');
+            $lead->notification_status = DB::raw('false');
+            
+            $lead->save();
 
             // Log lead creation
             LeadActivityLog::create([
@@ -203,9 +223,9 @@ class SalesConsultantController extends Controller
 
         // Update notification status if the assigned user is viewing the lead
         if (auth()->id() === $lead->assigned_user_id && !$lead->notification_status) {
-            $lead->update([
-                'notification_status' => DB::raw('true')
-            ]);
+            // Use DB::raw for boolean value
+            $lead->notification_status = DB::raw('true');
+            $lead->save();
             
             // Log the activity
             LeadActivityLog::create([
@@ -344,7 +364,7 @@ class SalesConsultantController extends Controller
 
         // Apply active/inactive filter
         if ($request->has('is_active')) {
-            $query->whereRaw('lead_active_status = ?', [$request->is_active ? 'true' : 'false']);
+            $query->where('lead_active_status', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
         }
 
         // Get the count of unique leads handled (counting one activity per lead per day)
@@ -373,7 +393,7 @@ class SalesConsultantController extends Controller
                 ->count(),
             'closed_leads' => $query->clone()
                 ->where('assigned_user_id', $user->id)
-                ->whereRaw('lead_active_status = false')
+                ->where('lead_active_status', false)
                 ->whereBetween('closed_at', [$startDate, $endDate])
                 ->count(),
             'won_leads' => $query->clone()
