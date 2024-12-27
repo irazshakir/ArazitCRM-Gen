@@ -1,7 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Table, Button, Space, Popconfirm, message, Drawer, Form, Select, Input, DatePicker, Badge } from 'antd';
+import { Table, Button, Space, Popconfirm, message, Drawer, Form, Select, Input, DatePicker, Badge, Checkbox } from 'antd';
 import { FilterOutlined, ClearOutlined } from '@ant-design/icons';
 import Pusher from 'pusher-js';
 import { notification } from 'antd';
@@ -19,6 +19,7 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showFilterDrawer, setShowFilterDrawer] = useState(false);
     const [form] = Form.useForm();
+    const [activeFilters, setActiveFilters] = useState({});
 
     // Add this state to track if filters are applied
     const hasActiveFilters = Object.values(filters || {}).some(value => 
@@ -105,21 +106,61 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
             title: 'Name',
             dataIndex: 'name',
             key: 'name',
-            render: (text, record) => (
-                <div className="flex items-center gap-2">
-                    {record.followup_required && (
-                        <span className="w-2 h-2 rounded-full bg-red-500" />
-                    )}
-                    <div className="flex items-center gap-2">
-                        {!record.notification_status && (
-                            <span className="inline-flex items-center rounded-full bg-[#a92479] px-2 py-0.5 text-xs font-medium text-white">
-                                New
-                            </span>
+            render: (text, record) => {
+                const isOverdue = record.followup_date && (() => {
+                    const followupDate = dayjs(record.followup_date);
+                    const now = dayjs();
+                    
+                    // If date is in the past
+                    if (followupDate.isBefore(now, 'day')) {
+                        return true;
+                    }
+                    
+                    // If date is today, check time
+                    if (followupDate.isSame(now, 'day')) {
+                        const followupMinutes = 
+                            (record.followup_period === 'PM' && record.followup_hour !== '12' 
+                                ? parseInt(record.followup_hour) + 12 
+                                : record.followup_period === 'AM' && record.followup_hour === '12'
+                                ? 0
+                                : parseInt(record.followup_hour)) * 60 
+                            + parseInt(record.followup_minute);
+                        
+                        const currentMinutes = now.hour() * 60 + now.minute();
+                        return followupMinutes < currentMinutes;
+                    }
+                    
+                    return false;
+                })();
+
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        {isOverdue && (
+                            <span 
+                                style={{ 
+                                    width: '8px', 
+                                    height: '8px', 
+                                    backgroundColor: '#ff4d4f',
+                                    borderRadius: '50%',
+                                    display: 'inline-block',
+                                    marginRight: '8px'
+                                }} 
+                            />
                         )}
-                        <span>{text}</span>
+                        {record.followup_required && (
+                            <span className="w-2 h-2 rounded-full bg-red-500" />
+                        )}
+                        <div className="flex items-center gap-2">
+                            {!record.notification_status && (
+                                <span className="inline-flex items-center rounded-full bg-[#a92479] px-2 py-0.5 text-xs font-medium text-white">
+                                    New
+                                </span>
+                            )}
+                            <span>{text}</span>
+                        </div>
                     </div>
-                </div>
-            ),
+                );
+            }
         },
         {
             title: 'Phone',
@@ -156,24 +197,47 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
         {
             title: 'Follow-up Date',
             key: 'followup',
-            render: (_, record) => {
-                if (!record.followup_date) return 'Not Set';
-                
-                const date = new Date(record.followup_date).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                });
-                
-                const time = `${record.followup_hour || ''}:${record.followup_minute || ''} ${record.followup_period || ''}`;
-                const isPast = record.followup_required;
-                
+            render: (text, record) => {
+                const isOverdue = record.followup_date && (() => {
+                    const followupDate = dayjs(record.followup_date);
+                    const now = dayjs();
+                    
+                    // If date is in the past
+                    if (followupDate.isBefore(now, 'day')) {
+                        return true;
+                    }
+                    
+                    // If date is today, check time
+                    if (followupDate.isSame(now, 'day')) {
+                        const followupMinutes = 
+                            (record.followup_period === 'PM' && record.followup_hour !== '12' 
+                                ? parseInt(record.followup_hour) + 12 
+                                : record.followup_period === 'AM' && record.followup_hour === '12'
+                                ? 0
+                                : parseInt(record.followup_hour)) * 60 
+                            + parseInt(record.followup_minute);
+                        
+                        const currentMinutes = now.hour() * 60 + now.minute();
+                        return followupMinutes < currentMinutes;
+                    }
+                    
+                    return false;
+                })();
+
+                const followupDate = record.followup_date ? dayjs(record.followup_date).format('D MMM YYYY') : '-';
+                const followupTime = record.followup_hour && record.followup_minute 
+                    ? `${record.followup_hour}:${record.followup_minute} ${record.followup_period}` 
+                    : '';
+
                 return (
-                    <span className={isPast ? 'text-red-600 font-medium' : ''}>
-                        {`${date}`} <br/> {`${time}`}
-                    </span>
+                    <div style={{ 
+                        color: isOverdue ? '#ff4d4f' : 'inherit',
+                        fontWeight: isOverdue ? 'bold' : 'normal'
+                    }}>
+                        {followupDate} {followupTime}
+                    </div>
                 );
-            },
+            }
         },
         {
             title: 'Status',
@@ -220,22 +284,55 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
     ];
 
     const handleFilter = (values) => {
+        setLoading(true);
+        console.log('Filter values:', values); // Add logging
+        
+        // Remove empty values
+        const cleanValues = Object.fromEntries(
+            Object.entries(values).filter(([key, value]) => {
+                if (Array.isArray(value)) {
+                    return value.length > 0;
+                }
+                // Special handling for boolean values
+                if (key === 'show_overdue') {
+                    return true; // Always include show_overdue
+                }
+                return value !== undefined && value !== null && value !== '';
+            })
+        );
+
+        // Ensure show_overdue is properly passed as a boolean
+        if (values.show_overdue !== undefined) {
+            cleanValues.show_overdue = Boolean(values.show_overdue);
+        }
+        
+        console.log('Clean values:', cleanValues); // Add logging
+        
+        setActiveFilters(cleanValues);
+
         router.get(
             route('sales-consultant.leads.index'),
-            {
-                ...values,
-                ...{ page: 1 },
-            },
+            cleanValues,
             {
                 preserveState: true,
                 preserveScroll: true,
                 only: ['leads'],
+                onSuccess: () => {
+                    setLoading(false);
+                    console.log('Filter applied successfully'); // Add logging
+                },
+                onError: (error) => {
+                    setLoading(false);
+                    console.error('Filter error:', error); // Add logging
+                    message.error('Failed to apply filters');
+                }
             }
         );
         setShowFilterDrawer(false);
     };
 
     const clearFilters = () => {
+        setActiveFilters({});
         form.resetFields();
         router.get(
             route('sales-consultant.leads.index'),
@@ -246,7 +343,36 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                 only: ['leads'],
             }
         );
-        setShowFilterDrawer(false);
+    };
+
+    // Function to display active filters summary
+    const getActiveFiltersSummary = () => {
+        const summary = [];
+        
+        if (activeFilters.lead_status?.length) {
+            summary.push(`Status: ${activeFilters.lead_status.join(', ')}`);
+        }
+        if (activeFilters.lead_source?.length) {
+            summary.push(`Source: ${activeFilters.lead_source.join(', ')}`);
+        }
+        if (activeFilters.followup_date_range) {
+            summary.push(`Follow-up: ${activeFilters.followup_date_range[0]} to ${activeFilters.followup_date_range[1]}`);
+        }
+        if (activeFilters.product_id) {
+            const product = products.find(p => p.id === activeFilters.product_id);
+            if (product) summary.push(`Product: ${product.name}`);
+        }
+        if (activeFilters.search) {
+            summary.push(`Search: ${activeFilters.search}`);
+        }
+        if (activeFilters.lead_active_status !== undefined) {
+            summary.push(`Status: ${activeFilters.lead_active_status === '1' ? 'Active' : 'Inactive'}`);
+        }
+        if (activeFilters.show_overdue) {
+            summary.push('Showing Overdue Leads');
+        }
+        
+        return summary.join(' | ');
     };
 
     return (
@@ -271,28 +397,33 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                                 >
                                     Create Lead
                                 </Button>
-                                <Button
-                                    icon={<FilterOutlined />}
-                                    onClick={() => setShowFilterDrawer(true)}
-                                    style={{
-                                        borderColor: hasActiveFilters ? '#a92479' : undefined,
-                                        color: hasActiveFilters ? '#a92479' : undefined
-                                    }}
-                                >
-                                    Filters {hasActiveFilters && '(Active)'}
-                                </Button>
-                                {hasActiveFilters && (
+                                <div className="flex items-center space-x-2">
                                     <Button
-                                        icon={<ClearOutlined />}
-                                        onClick={clearFilters}
+                                        icon={<FilterOutlined />}
+                                        onClick={() => setShowFilterDrawer(true)}
                                         style={{
-                                            borderColor: '#a92479',
-                                            color: '#a92479'
+                                            borderColor: Object.keys(activeFilters).length ? '#a92479' : undefined,
+                                            color: Object.keys(activeFilters).length ? '#a92479' : undefined
                                         }}
                                     >
-                                        Clear Filters
+                                        Filters
                                     </Button>
-                                )}
+                                    {Object.keys(activeFilters).length > 0 && (
+                                        <>
+                                            <span className="text-sm text-gray-500">{getActiveFiltersSummary()}</span>
+                                            <Button
+                                                icon={<ClearOutlined />}
+                                                onClick={clearFilters}
+                                                style={{
+                                                    borderColor: '#a92479',
+                                                    color: '#a92479'
+                                                }}
+                                            >
+                                                Clear Filters
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -316,6 +447,7 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                                     );
                                 },
                             }}
+                            loading={loading}
                         />
                     </div>
                 </div>
@@ -341,13 +473,17 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                     <Form.Item name="lead_status" label="Lead Status">
                         <Select
                             allowClear
+                            mode="multiple"
                             placeholder="Select status"
                             options={[
-                                { value: 'New', label: 'New' },
-                                { value: 'Contacted', label: 'Contacted' },
-                                { value: 'Interested', label: 'Interested' },
-                                { value: 'Not Interested', label: 'Not Interested' },
-                                { value: 'Converted', label: 'Converted' },
+                                { value: 'Initial Contact', label: 'Initial Contact' },
+                                { value: 'Query', label: 'Query' },
+                                { value: 'Negotiation', label: 'Negotiation' },
+                                { value: 'Won', label: 'Won' },
+                                { value: 'Lost', label: 'Lost' },
+                                { value: 'Non-Potential', label: 'Non-Potential' },
+                                { value: 'No-Reply', label: 'No-Reply' },
+                                { value: 'Call-Back-Later', label: 'Call-Back-Later' }
                             ]}
                         />
                     </Form.Item>
@@ -355,13 +491,15 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                     <Form.Item name="lead_source" label="Lead Source">
                         <Select
                             allowClear
+                            mode="multiple"
                             placeholder="Select source"
                             options={[
-                                { value: 'Website', label: 'Website' },
-                                { value: 'Referral', label: 'Referral' },
-                                { value: 'Social Media', label: 'Social Media' },
-                                { value: 'Direct', label: 'Direct' },
-                                { value: 'Other', label: 'Other' },
+                                { value: 'Facebook', label: 'Facebook' },
+                                { value: 'Instagram', label: 'Instagram' },
+                                { value: 'LinkedIn', label: 'LinkedIn' },
+                                { value: 'Whatsapp', label: 'Whatsapp' },
+                                { value: 'Google-Ads', label: 'Google Ads' },
+                                { value: 'Youtube-Ads', label: 'Youtube Ads' }
                             ]}
                         />
                     </Form.Item>
@@ -377,18 +515,14 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                         />
                     </Form.Item>
 
-                    <Form.Item name="followup_filter" label="Follow-up">
-                        <Select
-                            allowClear
-                            placeholder="Select follow-up filter"
-                            options={[
-                                { value: 'today', label: 'Today' },
-                                { value: 'week', label: 'This Week' },
-                                { value: 'month', label: 'This Month' },
-                                { value: 'overdue', label: 'Overdue' },
-                            ]}
+                    <Form.Item name="followup_date_range" label="Follow-up Date Range">
+                        <DatePicker.RangePicker 
+                            style={{ width: '100%' }}
+                            format="YYYY-MM-DD"
                         />
                     </Form.Item>
+
+                   
 
                     <Form.Item name="product_id" label="Product">
                         <Select
@@ -412,8 +546,17 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                         />
                     </Form.Item>
 
+                    <Form.Item name="show_overdue" valuePropName="checked">
+                        <Checkbox>
+                           
+                            <span className="text-md text-red-600 ml-2">
+                                Show Overdue Leads
+                            </span>
+                        </Checkbox>
+                    </Form.Item>
+
                     <Form.Item>
-                        <Button type="primary" htmlType="submit" block>
+                        <Button type="primary" htmlType="submit" block loading={loading}>
                             Apply Filters
                         </Button>
                     </Form.Item>

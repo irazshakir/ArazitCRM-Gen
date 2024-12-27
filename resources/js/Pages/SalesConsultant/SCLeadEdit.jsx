@@ -20,7 +20,7 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants, products 
         followup_hour: lead.followup_hour || null,
         followup_minute: lead.followup_minute || null,
         followup_period: lead.followup_period || null,
-        lead_active_status: lead.lead_active_status,
+        lead_active_status: String(lead.lead_active_status) === 'true',
         product_id: lead.product_id || null,
     });
 
@@ -57,6 +57,9 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants, products 
             formData.followup_date = formData.followup_date.format('YYYY-MM-DD');
         }
 
+        // Convert boolean to string 'true'/'false' for PostgreSQL
+        formData.lead_active_status = formData.lead_active_status ? 'true' : 'false';
+
         formData.followup_hour = formData.followup_hour?.toString() || null;
         formData.followup_minute = formData.followup_minute?.toString() || null;
         formData.followup_period = formData.followup_period || null;
@@ -67,7 +70,8 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants, products 
             },
             onError: (errors) => {
                 message.error(Object.values(errors)[0]);
-            }
+            },
+            preserveState: true
         });
     };
 

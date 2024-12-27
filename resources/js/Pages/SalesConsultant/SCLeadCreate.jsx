@@ -55,7 +55,7 @@ export default function SCLeadCreate({ show, onClose, leadConstants, products = 
             const sourceMatch = text.match(/source:\s*([^,]+)/i);
             if (sourceMatch) {
                 const source = sourceMatch[1].trim();
-                const matchedSource = leadConstants.SOURCES.find(
+                const matchedSource = leadConstants.sources.find(
                     s => s.toLowerCase() === source.toLowerCase()
                 );
                 if (matchedSource) {
@@ -212,7 +212,7 @@ export default function SCLeadCreate({ show, onClose, leadConstants, products = 
                             placeholder="Lead Source"
                             value={form.lead_source}
                             onChange={(value) => setForm({ ...form, lead_source: value })}
-                            options={leadConstants.SOURCES.map(source => ({
+                            options={leadConstants.sources.map(source => ({
                                 value: source,
                                 label: source
                             }))}
