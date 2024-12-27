@@ -122,14 +122,20 @@ class Lead extends Model
         return $this->belongsTo(User::class, 'assigned_user_id');
     }
 
+    /**
+     * Get all notes for this lead.
+     */
     public function notes(): HasMany
     {
-        return $this->hasMany(LeadNotes::class);
+        return $this->hasMany(LeadNotes::class)->orderBy('created_at', 'desc');
     }
 
+    /**
+     * Get all documents for this lead.
+     */
     public function documents(): HasMany
     {
-        return $this->hasMany(LeadDocument::class);
+        return $this->hasMany(LeadDocument::class)->orderBy('created_at', 'desc');
     }
 
     public function product(): BelongsTo

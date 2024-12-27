@@ -156,7 +156,6 @@ export default function SCLeadEdit({ auth, lead, users, leadConstants = {}, prod
                         {/* Main Lead Edit Form */}
                         <div className="w-1/3 bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                             <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-semibold text-gray-800">Edit Lead</h2>
                                 <div className="flex gap-2">
                                     <Button 
                                         type="primary" 

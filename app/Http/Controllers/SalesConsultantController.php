@@ -34,7 +34,12 @@ class SalesConsultantController extends Controller
     {
         try {
             $query = Lead::query()
-                ->with(['product', 'assignedUser'])
+                ->with([
+                    'product', 
+                    'assignedUser',
+                    'notes.user',
+                    'documents.user'
+                ])
                 ->where('assigned_user_id', auth()->id())
                 ->when($request->search, function ($query, $search) {
                     $query->where(function ($q) use ($search) {
@@ -176,9 +181,15 @@ class SalesConsultantController extends Controller
         }
 
         return Inertia::render('SalesConsultant/SCLeadEdit', [
-            'lead' => $lead->load(['assignedUser', 'product', 'activityLogs' => function($query) {
-                $query->with('user')->latest();
-            }]),
+            'lead' => $lead->load([
+                'assignedUser', 
+                'product', 
+                'activityLogs' => function($query) {
+                    $query->with('user')->latest();
+                },
+                'notes.user',
+                'documents.user'
+            ]),
             'users' => UserModel::where('role', 'sales-consultant')
                                ->whereRaw('is_active = true')
                                ->get(),

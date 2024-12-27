@@ -3,23 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\Lead;
-use App\Http\Requests\StoreLeadRequest;
-use App\Http\Requests\UpdateLeadRequest;
+use App\Models\User;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use App\Models\User;
+use App\Traits\LogsLeadActivity;
+use App\Events\LeadCreated;
+use App\Events\LeadUpdated;
 use Illuminate\Support\Facades\Auth;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Imports\LeadsImport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
-use App\Models\Product;
-use App\Events\LeadUpdated;
-use App\Events\LeadCreated;
+use App\Imports\LeadsImport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class LeadController extends Controller
 {
+    use LogsLeadActivity;
+
     /**
      * Display a listing of the resource.
      */
@@ -134,38 +135,44 @@ class LeadController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreLeadRequest $request)
+    public function store(Request $request)
     {
-        try {
-            $validated = $request->validated();
-            
-            // Create the lead with explicit boolean using DB::raw
-            $lead = Lead::create([
-                'name' => $validated['name'],
-                'phone' => $validated['phone'],
-                'assigned_user_id' => $validated['assigned_user_id'],
-                'lead_source' => $validated['lead_source'],
-                'lead_status' => $validated['lead_status'] ?? 'Query',
-                'initial_remarks' => $validated['initial_remarks'] ?? null,
-                'followup_date' => $validated['followup_date'] ?? null,
-                'followup_hour' => $validated['followup_hour'] ?? null,
-                'followup_minute' => $validated['followup_minute'] ?? null,
-                'followup_period' => $validated['followup_period'] ?? null,
-                'lead_active_status' => DB::raw('true'),  // Use DB::raw for boolean
-                'notification_status' => DB::raw('false'),  // Set to false for new leads
-                'product_id' => $validated['product_id'] ?? null,
-                'email' => $validated['email'] ?? $validated['phone'] . '@test.com',
-                'city' => $validated['city'] ?? 'Others',
-                'assigned_at' => $validated['assigned_user_id'] ? now() : null,
-            ]);
-
-            // Broadcast the event
-            event(new LeadCreated($lead));
-
-            return redirect()->back()->with('success', 'Lead created successfully');
-        } catch (\Exception $e) {
-            return redirect()->back()->withErrors(['error' => 'Failed to create lead. ' . $e->getMessage()]);
+        if (!auth()->user()->can('create', Lead::class)) {
+            abort(403, 'Unauthorized action.');
         }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'required|string|max:20',
+            'city' => 'required|string|max:255',
+            'lead_status' => 'required|string',
+            'lead_source' => 'required|string',
+            'initial_remarks' => 'nullable|string',
+            'assigned_user_id' => 'required|exists:users,id',
+            'followup_date' => 'nullable|date',
+            'followup_hour' => 'nullable|integer|min:1|max:12',
+            'followup_minute' => 'nullable|integer|min:0|max:59',
+            'followup_period' => 'nullable|in:AM,PM',
+            'product_id' => 'nullable|exists:products,id',
+        ]);
+
+        $lead = Lead::create([
+            ...$validated,
+            'created_by' => auth()->id(),
+            'lead_active_status' => true,
+        ]);
+
+        // Log the lead creation activity
+        $this->logLeadActivity($lead, 'lead_created', [
+            'created_by' => auth()->user()->name,
+            'assigned_to' => User::find($validated['assigned_user_id'])->name,
+        ]);
+
+        event(new LeadCreated($lead));
+
+        return redirect()->route('leads.index')
+            ->with('success', 'Lead created successfully.');
     }
 
     /**
@@ -181,72 +188,82 @@ class LeadController extends Controller
      */
     public function edit(Lead $lead)
     {
-        // Check if user has access to this lead
-        if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+        if (!auth()->user()->can('view', $lead)) {
             abort(403, 'Unauthorized action.');
-        }
-
-        // If the current user is the assigned user, mark the lead as viewed
-        if ($lead->assigned_user_id === Auth::id()) {
-            $lead->update([
-                'notification_status' => DB::raw('true')
-            ]);
         }
 
         return Inertia::render('Lead/LeadEdit', [
             'lead' => $lead->load([
-                'assignedUser',
+                'assignedUser', 
+                'product',
+                'activityLogs' => function($query) {
+                    $query->with('user')->latest();
+                },
                 'notes.user',
                 'documents.user'
             ]),
-            'users' => User::whereRaw('is_active = true')->get(['id', 'name']),
+            'users' => User::where('role', 'sales-consultant')
+                         ->whereRaw('is_active = true')
+                         ->get(),
             'leadConstants' => [
-                'STATUSES' => Lead::STATUSES,
-                'SOURCES' => Lead::LEAD_SOURCES,
-                'CITIES' => Lead::CITIES,
+                'STATUSES' => config('constants.lead.STATUSES'),
+                'SOURCES' => config('constants.lead.SOURCES'),
+                'CITIES' => config('constants.lead.CITIES'),
             ],
-            'products' => Product::whereRaw('active_status = true')
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            'products' => Product::all(),
         ]);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateLeadRequest $request, Lead $lead)
+    public function update(Request $request, Lead $lead)
     {
-        // Check if user has access to this lead
-        if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+        if (!auth()->user()->can('update', $lead)) {
             abort(403, 'Unauthorized action.');
         }
 
-        $validated = $request->validated();
-        
-        // Handle assigned user change
-        if ($lead->assigned_user_id !== $validated['assigned_user_id']) {
-            $validated['assigned_at'] = now();
-            $validated['notification_status'] = DB::raw('false'); // Set notification to false for new assignee
-        }
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'required|string|max:20',
+            'city' => 'required|string|max:255',
+            'lead_status' => 'required|string',
+            'lead_source' => 'required|string',
+            'initial_remarks' => 'nullable|string',
+            'assigned_user_id' => 'required|exists:users,id',
+            'followup_date' => 'nullable|date',
+            'followup_hour' => 'nullable|integer|min:1|max:12',
+            'followup_minute' => 'nullable|integer|min:0|max:59',
+            'followup_period' => 'nullable|in:AM,PM',
+            'product_id' => 'nullable|exists:products,id',
+            'lead_active_status' => 'boolean',
+        ]);
 
-        // Handle lead status change
-        if ($validated['lead_status'] === 'Won') {
-            $validated['won_at'] = now();
-        } elseif ($lead->lead_status === 'Won' && $validated['lead_status'] !== 'Won') {
-            $validated['won_at'] = null;
-        }
+        // Get the original values before update
+        $originalValues = $lead->getOriginal();
 
-        // Handle active status change
-        if (!$validated['lead_active_status'] && $lead->lead_active_status) {
-            $validated['closed_at'] = now();
-        }
-
+        // Update the lead
         $lead->update($validated);
 
-        // Broadcast the event
-        event(new LeadUpdated($lead));
+        // Compare and log changes
+        $changes = [];
+        foreach ($validated as $key => $value) {
+            if (isset($originalValues[$key]) && $originalValues[$key] !== $value) {
+                $changes[$key] = [
+                    'old' => $originalValues[$key],
+                    'new' => $value
+                ];
+            }
+        }
 
-        return redirect()->back()->with('success', 'Lead updated successfully');
+        if (!empty($changes)) {
+            $this->logLeadActivity($lead, 'lead_updated', $changes);
+            event(new LeadUpdated($lead));
+        }
+
+        return redirect()->back()
+            ->with('success', 'Lead updated successfully.');
     }
 
     /**
