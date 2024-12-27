@@ -47,6 +47,7 @@ export default function AuthenticatedLayout({ user, header, children }) {
                 { name: 'Leads', href: route('reports.leads'), icon: ClipboardDocumentListIcon },
                 { name: 'Sales', href: route('reports.sales'), icon: CurrencyDollarIcon },
                 { name: 'Marketing', href: route('reports.marketing'), icon: ChartPieIcon },
+                { name: 'Activity Logs', href: route('reports.logs'), icon: DocumentTextIcon },
             ],
         },
         { 

@@ -51,6 +51,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('leads', LeadController::class);
         Route::post('leads/bulk-upload', [LeadController::class, 'bulkUpload'])->name('leads.bulk-upload');
         Route::get('leads/template-download', [LeadController::class, 'downloadTemplate'])->name('leads.template-download');
+        Route::get('reports/leads', [ReportController::class, 'leads'])->name('reports.leads');
+        Route::get('reports/logs', [ReportController::class, 'logs'])->name('reports.logs');
         // lead notes related routes 
         // Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
         // Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');

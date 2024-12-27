@@ -799,6 +799,52 @@ class ReportController extends Controller
         return $previousLeads > 0 ? $previousBudget / $previousLeads : 0;
     }
 
+    public function logs(Request $request)
+    {
+        $startDate = $request->input('start_date') 
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : Carbon::now()->startOfMonth();
+        
+        $endDate = $request->input('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : Carbon::now()->endOfMonth();
+
+        $query = DB::table('lead_activity_logs AS lal')
+            ->join('users', 'lal.user_id', '=', 'users.id')
+            ->join('leads', 'lal.lead_id', '=', 'leads.id')
+            ->whereBetween('lal.created_at', [$startDate, $endDate])
+            ->when($request->user_id, function ($query, $userId) {
+                $query->where('lal.user_id', $userId);
+            });
+
+        // Get count of unique leads handled
+        $leadsHandled = (clone $query)
+            ->distinct('lal.lead_id')
+            ->count('lal.lead_id');
+
+        // Get activities with lead and user details
+        $activities = $query
+            ->select([
+                'leads.name as lead_name',
+                'leads.phone',
+                'lal.activity_type',
+                'lal.activity_details',
+                'users.name as user_name',
+                'lal.created_at as timestamp',
+                'lal.id'
+            ])
+            ->orderBy('lal.created_at', 'desc')
+            ->get();
+
+        return Inertia::render('Reports/LogReport', [
+            'stats' => [
+                'leads_handled' => $leadsHandled,
+                'activities' => $activities
+            ],
+            'users' => User::select('id', 'name')->get()
+        ]);
+    }
+
     public function leads(Request $request)
     {
         $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : now()->startOfMonth();
