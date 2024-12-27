@@ -364,7 +364,7 @@ class SalesConsultantController extends Controller
 
         // Apply active/inactive filter
         if ($request->has('is_active')) {
-            $query->where('lead_active_status', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
+            $query->whereRaw('lead_active_status IS ' . ($request->is_active ? 'TRUE' : 'FALSE'));
         }
 
         // Get the count of unique leads handled (counting one activity per lead per day)
@@ -393,7 +393,7 @@ class SalesConsultantController extends Controller
                 ->count(),
             'closed_leads' => $query->clone()
                 ->where('assigned_user_id', $user->id)
-                ->where('lead_active_status', false)
+                ->whereRaw('lead_active_status IS FALSE')
                 ->whereBetween('closed_at', [$startDate, $endDate])
                 ->count(),
             'won_leads' => $query->clone()
@@ -442,7 +442,7 @@ class SalesConsultantController extends Controller
                 ->select([
                     DB::raw("COUNT(CASE WHEN created_by = {$userId} THEN 1 END) as created"),
                     DB::raw('COUNT(*) as assigned'),
-                    DB::raw("COUNT(CASE WHEN lead_active_status = false AND closed_at IS NOT NULL THEN 1 END) as closed"),
+                    DB::raw("COUNT(CASE WHEN lead_active_status IS FALSE AND closed_at IS NOT NULL THEN 1 END) as closed"),
                     DB::raw("COUNT(CASE WHEN lead_status = 'Won' AND won_at IS NOT NULL THEN 1 END) as won")
                 ])
                 ->first();

@@ -255,8 +255,8 @@ export default function SCReports({ auth, stats, leadSources, leadStatuses, prod
                         <Select
                             placeholder="Select lead activity status"
                             options={[
-                                { label: 'Active Leads', value: 1 },
-                                { label: 'Inactive Leads', value: 0 }
+                                { label: 'Active Leads', value: true },
+                                { label: 'Inactive Leads', value: false }
                             ]}
                         />
                     </Form.Item>
