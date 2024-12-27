@@ -280,7 +280,7 @@ export default function LeadCreate({ show, onClose, users, leadConstants, produc
                                         setForm({
                                             ...form,
                                             followup_hour: time.format('h'),
-                                            followup_minute: time.format('mm'),
+                                            followup_minute: parseInt(time.format('mm'), 10),
                                             followup_period: time.format('A')
                                         });
                                     }

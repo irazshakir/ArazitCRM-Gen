@@ -145,26 +145,46 @@ class LeadController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'required|string|max:20',
-            'city' => 'required|string|max:255',
+            'city' => 'nullable|string|max:255',
             'lead_status' => 'required|string',
             'lead_source' => 'required|string',
             'initial_remarks' => 'nullable|string',
             'assigned_user_id' => 'required|exists:users,id',
             'followup_date' => 'nullable|date',
             'followup_hour' => 'nullable|integer|min:1|max:12',
-            'followup_minute' => 'nullable|integer|min:0|max:59',
+            'followup_minute' => ['nullable', 'regex:/^\d+$/', 'min:0', 'max:59'],
             'followup_period' => 'nullable|in:AM,PM',
             'product_id' => 'nullable|exists:products,id',
         ]);
 
+        // Set default values for required fields
+        $validated = array_merge([
+            'city' => 'Others',
+            'lead_source' => 'Facebook',
+            'lead_status' => 'Query',
+        ], $validated);
+
+        // Convert followup_minute to integer if it exists
+        if (isset($validated['followup_minute'])) {
+            $validated['followup_minute'] = (int) $validated['followup_minute'];
+        }
+
+        // Generate email from phone if not provided
+        if (empty($validated['email'])) {
+            // Remove any non-numeric characters from phone
+            $cleanPhone = preg_replace('/[^0-9]/', '', $validated['phone']);
+            $validated['email'] = $cleanPhone . '@test.com';
+        }
+
         $lead = Lead::create([
             ...$validated,
             'created_by' => auth()->id(),
-            'lead_active_status' => true,
+            'lead_active_status' => DB::raw('true'),
         ]);
 
         // Log the lead creation activity
-        $this->logLeadActivity($lead, 'lead_created', [
+        $this->logLeadActivity($lead->id, 'field_updated', [
+            'action' => 'created',
             'created_by' => auth()->user()->name,
             'assigned_to' => User::find($validated['assigned_user_id'])->name,
         ]);
@@ -192,6 +212,22 @@ class LeadController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // Update notification status if the assigned user is viewing the lead
+        if (auth()->id() === $lead->assigned_user_id && !$lead->notification_status) {
+            $lead->update([
+                'notification_status' => DB::raw('true')
+            ]);
+            
+            // Log the activity
+            $this->logLeadActivity($lead->id, 'field_updated', [
+                'action' => 'notification_viewed',
+                'field' => 'notification_status',
+                'old_value' => false,
+                'new_value' => true,
+                'viewed_by' => auth()->user()->name
+            ]);
+        }
+
         return Inertia::render('Lead/LeadEdit', [
             'lead' => $lead->load([
                 'assignedUser', 
@@ -211,6 +247,11 @@ class LeadController extends Controller
                 'CITIES' => config('constants.lead.CITIES'),
             ],
             'products' => Product::all(),
+            'can' => [
+                'edit' => auth()->user()->can('update', $lead),
+                'delete' => auth()->user()->can('delete', $lead),
+                'view_activity_log' => auth()->user()->can('viewActivityLog', $lead),
+            ],
         ]);
     }
 
@@ -227,18 +268,43 @@ class LeadController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'required|string|max:20',
-            'city' => 'required|string|max:255',
+            'city' => 'nullable|string|max:255',
             'lead_status' => 'required|string',
             'lead_source' => 'required|string',
             'initial_remarks' => 'nullable|string',
             'assigned_user_id' => 'required|exists:users,id',
             'followup_date' => 'nullable|date',
             'followup_hour' => 'nullable|integer|min:1|max:12',
-            'followup_minute' => 'nullable|integer|min:0|max:59',
+            'followup_minute' => ['nullable', 'regex:/^\d+$/', 'min:0', 'max:59'],
             'followup_period' => 'nullable|in:AM,PM',
             'product_id' => 'nullable|exists:products,id',
             'lead_active_status' => 'boolean',
         ]);
+
+        // Set default values for required fields if not provided
+        $validated = array_merge([
+            'city' => 'Others',
+            'lead_source' => 'Facebook',
+            'lead_status' => 'Query',
+            'lead_active_status' => true,
+        ], $validated);
+
+        // Convert followup_minute to integer if it exists
+        if (isset($validated['followup_minute'])) {
+            $validated['followup_minute'] = (int) $validated['followup_minute'];
+        }
+
+        // Generate email from phone if not provided
+        if (empty($validated['email'])) {
+            // Remove any non-numeric characters from phone
+            $cleanPhone = preg_replace('/[^0-9]/', '', $validated['phone']);
+            $validated['email'] = $cleanPhone . '@test.com';
+        }
+
+        // Convert lead_active_status to a proper PostgreSQL boolean
+        if (isset($validated['lead_active_status'])) {
+            $validated['lead_active_status'] = DB::raw($validated['lead_active_status'] ? 'true' : 'false');
+        }
 
         // Get the original values before update
         $originalValues = $lead->getOriginal();
@@ -258,7 +324,10 @@ class LeadController extends Controller
         }
 
         if (!empty($changes)) {
-            $this->logLeadActivity($lead, 'lead_updated', $changes);
+            $this->logLeadActivity($lead->id, 'field_updated', [
+                'action' => 'updated',
+                'changes' => $changes
+            ]);
             event(new LeadUpdated($lead));
         }
 
