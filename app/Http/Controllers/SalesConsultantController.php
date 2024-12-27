@@ -13,15 +13,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateLeadRequest;
 use App\Http\Requests\StoreLeadRequest;
 use App\Events\LeadCreated;
-use App\Models\User as UserModel;
-use App\Models\SalesConsultant;
-use Carbon\Carbon;
 use App\Events\LeadUpdated;
 use App\Http\Requests\UpdateSalesConsultantRequest;
 use App\Http\Requests\StoreSalesConsultantRequest;
+use App\Models\LeadActivityLog;
+use App\Models\User as UserModel;
+use App\Models\SalesConsultant;
+use Carbon\Carbon;
+use App\Traits\LogsLeadActivity;
 
 class SalesConsultantController extends Controller
 {
+    use LogsLeadActivity;
+
     /**
      * Display a listing of the resource.
      */
@@ -174,34 +178,45 @@ class SalesConsultantController extends Controller
     public function store(StoreLeadRequest $request)
     {
         try {
-            $validated = $request->validated();
-            
-            // Create the lead with explicit boolean using DB::raw
-            $lead = Lead::create([
-                'name' => $validated['name'],
-                'phone' => $validated['phone'],
-                'assigned_user_id' => $validated['assigned_user_id'],
-                'lead_source' => $validated['lead_source'],
-                'lead_status' => $validated['lead_status'] ?? 'Query',
-                'initial_remarks' => $validated['initial_remarks'] ?? null,
-                'followup_date' => $validated['followup_date'] ?? null,
-                'followup_hour' => $validated['followup_hour'] ?? null,
-                'followup_minute' => $validated['followup_minute'] ?? null,
-                'followup_period' => $validated['followup_period'] ?? null,
-                'lead_active_status' => DB::raw('true'),  // Use DB::raw for boolean
-                'notification_status' => DB::raw('false'),  // Set to false for new leads
-                'product_id' => $validated['product_id'] ?? null,
-                'email' => $validated['email'] ?? $validated['phone'] . '@test.com',
-                'city' => $validated['city'] ?? 'Others',
-                'assigned_at' => now(),
+            $data = $request->validated();
+            $data['created_by'] = Auth::id();
+            $data['assigned_user_id'] = Auth::id(); // Sales consultant creates leads for themselves
+            $data['lead_active_status'] = true;
+            $data['notification_status'] = false;
+
+            $lead = Lead::create($data);
+
+            // Log lead creation
+            $this->logLeadActivity($lead->id, 'lead_created', [
+                'name' => $lead->name,
+                'email' => $lead->email,
+                'phone' => $lead->phone,
+                'source' => $lead->lead_source
             ]);
 
-            // Broadcast the event
+            // Log initial remarks if provided
+            if (!empty($data['initial_remarks'])) {
+                $this->logLeadActivity($lead->id, 'note_added', [
+                    'note' => $data['initial_remarks']
+                ]);
+            }
+
+            // Log followup schedule if provided
+            if (!empty($data['followup_date'])) {
+                $this->logLeadActivity($lead->id, 'followup_scheduled', [
+                    'date' => $data['followup_date'],
+                    'hour' => $data['followup_hour'],
+                    'minute' => $data['followup_minute'],
+                    'period' => $data['followup_period']
+                ]);
+            }
+
             event(new LeadCreated($lead));
 
-            return redirect()->back()->with('success', 'Lead created successfully');
+            return redirect()->back()->with('success', 'Lead created successfully.');
         } catch (\Exception $e) {
-            return redirect()->back()->withErrors(['error' => 'Failed to create lead. ' . $e->getMessage()]);
+            Log::error('Error creating lead: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error creating lead. Please try again.');
         }
     }
 
@@ -251,53 +266,88 @@ class SalesConsultantController extends Controller
      */
     public function update(UpdateLeadRequest $request, Lead $lead)
     {
-        // Check if the lead is assigned to the current user
-        if ($lead->assigned_user_id !== Auth::id()) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        $validated = $request->validated();
-
-        // Handle assigned user change
-        if ($lead->assigned_user_id !== $validated['assigned_user_id']) {
-            $validated['assigned_at'] = now();
-            $validated['notification_status'] = DB::raw('false'); // Set notification to false for new assignee
-        }
-
-        // Handle lead status change
-        if ($validated['lead_status'] === 'Won') {
-            $validated['won_at'] = now();
-        } elseif ($lead->lead_status === 'Won' && $validated['lead_status'] !== 'Won') {
-            $validated['won_at'] = null;
-        }
-
-        // Handle active status change and closed_at date
-        if (isset($validated['lead_active_status'])) {
-            // Convert string 'true'/'false' to boolean
-            $isActive = $validated['lead_active_status'] === 'true';
+        try {
+            $data = $request->validated();
+            $originalLead = $lead->toArray();
             
-            // Update closed_at based on active status
-            if (!$isActive) {
-                $validated['closed_at'] = now();
-            } else {
-                $validated['closed_at'] = null;
+            // Don't allow changing the creator
+            unset($data['created_by']);
+            
+            // Check for assignment change
+            if (isset($data['assigned_user_id']) && $lead->assigned_user_id !== $data['assigned_user_id']) {
+                $this->logLeadActivity($lead->id, 'lead_assigned', [
+                    'from_user_id' => $lead->assigned_user_id,
+                    'to_user_id' => $data['assigned_user_id']
+                ]);
             }
 
-            // Use DB::raw for PostgreSQL boolean
-            $validated['lead_active_status'] = DB::raw($isActive ? 'true' : 'false');
+            // Check for status change
+            if (isset($data['lead_status']) && $lead->lead_status !== $data['lead_status']) {
+                $this->logLeadActivity($lead->id, 'status_updated', [
+                    'from_status' => $lead->lead_status,
+                    'to_status' => $data['lead_status']
+                ]);
+
+                // Special handling for Won status
+                if ($data['lead_status'] === 'Won') {
+                    $data['won_at'] = now();
+                    $this->logLeadActivity($lead->id, 'lead_won');
+                }
+            }
+
+            // Check for active status change
+            if (isset($data['lead_active_status'])) {
+                $newActiveStatus = filter_var($data['lead_active_status'], FILTER_VALIDATE_BOOLEAN);
+                if ($lead->lead_active_status !== $newActiveStatus) {
+                    if (!$newActiveStatus) {
+                        $data['closed_at'] = now();
+                        $this->logLeadActivity($lead->id, 'lead_closed');
+                    }
+                }
+            }
+
+            // Check for followup changes
+            if (isset($data['followup_date']) && 
+                ($lead->followup_date != $data['followup_date'] ||
+                $lead->followup_hour != $data['followup_hour'] ||
+                $lead->followup_minute != $data['followup_minute'] ||
+                $lead->followup_period != $data['followup_period'])) {
+                
+                $this->logLeadActivity($lead->id, 'followup_scheduled', [
+                    'date' => $data['followup_date'],
+                    'hour' => $data['followup_hour'],
+                    'minute' => $data['followup_minute'],
+                    'period' => $data['followup_period']
+                ]);
+            }
+
+            // Log any other field changes
+            $fieldsToTrack = ['name', 'email', 'phone', 'city', 'lead_source', 'product_id'];
+            $changedFields = [];
+            foreach ($fieldsToTrack as $field) {
+                if (isset($data[$field]) && $lead->$field !== $data[$field]) {
+                    $changedFields[$field] = [
+                        'from' => $lead->$field,
+                        'to' => $data[$field]
+                    ];
+                }
+            }
+            
+            if (!empty($changedFields)) {
+                $this->logLeadActivity($lead->id, 'field_updated', [
+                    'changes' => $changedFields
+                ]);
+            }
+
+            $lead->update($data);
+
+            event(new LeadUpdated($lead));
+
+            return redirect()->back()->with('success', 'Lead updated successfully.');
+        } catch (\Exception $e) {
+            Log::error('Error updating lead: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error updating lead. Please try again.');
         }
-
-        // Update the lead with the validated data
-        DB::table('leads')
-            ->where('id', $lead->id)
-            ->update(array_map(function ($value) {
-                return $value instanceof \Illuminate\Database\Query\Expression ? $value : $value;
-            }, $validated));
-
-        // Broadcast the event
-        event(new LeadUpdated($lead));
-
-        return redirect()->back()->with('success', 'Lead updated successfully');
     }
 
     /**
@@ -306,5 +356,150 @@ class SalesConsultantController extends Controller
     public function destroy(SalesConsultant $salesConsultant)
     {
         //
+    }
+
+    /**
+     * Display reports for sales consultant.
+     */
+    public function reports(Request $request)
+    {
+        $user = Auth::user();
+        $query = Lead::query();
+
+        // Set default date range to current month if not provided
+        $startDate = $request->start_date ? $request->start_date : now()->startOfMonth()->format('Y-m-d');
+        $endDate = $request->end_date ? $request->end_date : now()->endOfMonth()->format('Y-m-d');
+
+        // Apply date range filter
+        $query->whereBetween('created_at', [$startDate, $endDate]);
+
+        // Apply lead sources filter
+        if ($request->has('lead_sources')) {
+            $query->whereIn('lead_source', $request->lead_sources);
+        }
+
+        // Apply lead status filter
+        if ($request->has('lead_statuses')) {
+            $query->whereIn('lead_status', $request->lead_statuses);
+        }
+
+        // Apply products filter
+        if ($request->has('products')) {
+            $query->whereHas('products', function ($q) use ($request) {
+                $q->whereIn('products.id', $request->products);
+            });
+        }
+
+        // Apply active/inactive filter
+        if ($request->has('is_active')) {
+            $query->whereRaw('lead_active_status = ?', [$request->is_active ? 'true' : 'false']);
+        }
+
+        // Get the count of unique leads handled (counting one activity per lead per day)
+        $activeLeadsCount = DB::table('lead_activity_logs')
+            ->where('user_id', $user->id)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->select(
+                'lead_id',
+                DB::raw('DATE(created_at) as activity_date')
+            )
+            ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+            ->get()
+            ->unique(function ($item) {
+                return $item->lead_id;
+            })
+            ->count();
+
+        // Get stats
+        $stats = [
+            'created_leads' => $query->clone()
+                ->where('created_by', $user->id)
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->count(),
+            'assigned_leads' => $query->clone()
+                ->where('assigned_user_id', $user->id)
+                ->count(),
+            'closed_leads' => $query->clone()
+                ->where('assigned_user_id', $user->id)
+                ->whereRaw('lead_active_status = false')
+                ->whereBetween('closed_at', [$startDate, $endDate])
+                ->count(),
+            'won_leads' => $query->clone()
+                ->where('assigned_user_id', $user->id)
+                ->where('lead_status', 'Won')
+                ->whereBetween('won_at', [$startDate, $endDate])
+                ->count(),
+            'active_leads' => $activeLeadsCount,
+            'monthly_trends' => $this->getMonthlyTrends($user->id, $startDate, $endDate)
+        ];
+
+        // Get unique values for filters
+        $leadSources = Lead::distinct()->pluck('lead_source');
+        $leadStatuses = Lead::distinct()->pluck('lead_status');
+
+        return Inertia::render('SalesConsultant/SCReports', [
+            'stats' => $stats,
+            'leadSources' => $leadSources->map(fn($source) => ['id' => $source, 'name' => $source]),
+            'leadStatuses' => $leadStatuses->map(fn($status) => ['id' => $status, 'name' => $status]),
+            'products' => Product::all(),
+        ]);
+    }
+
+    /**
+     * Get monthly trends for sales consultant.
+     */
+    private function getMonthlyTrends($userId, $startDate, $endDate)
+    {
+        // First, get the months we need to report on
+        $months = Lead::where('assigned_user_id', $userId)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->select(DB::raw("to_char(created_at, 'YYYY-MM') as month"))
+            ->groupBy('month')
+            ->orderBy('month')
+            ->pluck('month');
+
+        // Then, for each month, get the stats
+        $trends = [];
+        foreach ($months as $month) {
+            $monthStart = \Carbon\Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $monthEnd = \Carbon\Carbon::createFromFormat('Y-m', $month)->endOfMonth();
+
+            // Get lead stats
+            $leadStats = Lead::where('assigned_user_id', $userId)
+                ->whereBetween('created_at', [$monthStart, $monthEnd])
+                ->select([
+                    DB::raw("COUNT(CASE WHEN created_by = {$userId} THEN 1 END) as created"),
+                    DB::raw('COUNT(*) as assigned'),
+                    DB::raw("COUNT(CASE WHEN lead_active_status = false AND closed_at IS NOT NULL THEN 1 END) as closed"),
+                    DB::raw("COUNT(CASE WHEN lead_status = 'Won' AND won_at IS NOT NULL THEN 1 END) as won")
+                ])
+                ->first();
+
+            // Get count of unique leads handled per day
+            $activeLeads = DB::table('lead_activity_logs')
+                ->where('user_id', $userId)
+                ->whereBetween('created_at', [$monthStart, $monthEnd])
+                ->select(
+                    'lead_id',
+                    DB::raw('DATE(created_at) as activity_date')
+                )
+                ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+                ->get()
+                ->unique(function ($item) {
+                    return $item->lead_id;
+                })
+                ->count();
+
+            $trends[] = [
+                'month' => $month,
+                'created' => $leadStats->created,
+                'assigned' => $leadStats->assigned,
+                'closed' => $leadStats->closed,
+                'won' => $leadStats->won,
+                'active' => $activeLeads
+            ];
+        }
+
+        return collect($trends);
     }
 }

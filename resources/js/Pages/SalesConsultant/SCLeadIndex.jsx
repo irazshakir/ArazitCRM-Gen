@@ -547,8 +547,7 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                     </Form.Item>
 
                     <Form.Item name="show_overdue" valuePropName="checked">
-                        <Checkbox>
-                           
+                        <Checkbox className="custom-checkbox">
                             <span className="text-md text-red-600 ml-2">
                                 Show Overdue Leads
                             </span>
@@ -556,7 +555,16 @@ export default function SCLeadIndex({ auth, leads, leadConstants, filters, produ
                     </Form.Item>
 
                     <Form.Item>
-                        <Button type="primary" htmlType="submit" block loading={loading}>
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            block
+                            loading={loading}
+                            style={{
+                                backgroundColor: '#85115b',
+                                borderColor: '#85115b',
+                            }}
+                        >
                             Apply Filters
                         </Button>
                     </Form.Item>

@@ -138,6 +138,19 @@ export default function AuthenticatedLayout({ user, header, children }) {
     const salesConsultantNavigation = [
         { name: 'Dashboard', href: route('dashboard'), icon: HomeIcon },
         { name: 'My Leads', href: route('sales-consultant.leads.index'), icon: UserGroupIcon },
+        { 
+            name: 'My Reports', 
+            href: route('sc.reports'), 
+            icon: ChartBarIcon,
+            onClick: (e) => {
+                e.preventDefault();
+                router.visit(route('sc.reports'), {
+                    preserveState: false,
+                    preserveScroll: false,
+                    replace: false
+                });
+            }
+        },
     ];
 
     const userNavigation = [

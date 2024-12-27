@@ -14,6 +14,7 @@ class Lead extends Model
         'email',
         'city',
         'assigned_user_id',
+        'created_by',
         'lead_status',
         'lead_active_status',
         'notification_status',
@@ -109,5 +110,13 @@ class Lead extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Get the user who created the lead.
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

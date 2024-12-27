@@ -26,3 +26,12 @@
     width: 80px;
 }
 
+.custom-checkbox .ant-checkbox-checked .ant-checkbox-inner {
+    background-color: #85115b;
+    border-color: #85115b;
+}
+
+.custom-checkbox .ant-checkbox-checked::after {
+    border-color: #85115b;
+}
+

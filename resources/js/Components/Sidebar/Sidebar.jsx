@@ -125,15 +125,20 @@ export default function Sidebar() {
                     { href: route('reports.marketing'), label: 'Marketing Report', icon: ChartPieIcon, baseRoute: 'reports.marketing' },
                 ],
             },
-        ] : []),
-        ...(auth.user.role === 'sales-consultant' ? [
+        ] : auth.user.role === 'sales-consultant' ? [
             {
                 href: route('sales-consultant.leads.index'),
                 label: 'My Leads',
                 icon: UserGroupIcon,
                 baseRoute: 'sales-consultant.leads'
+            },
+            {
+                href: route('sc.reports'),
+                label: 'My Reports',
+                icon: ChartBarIcon,
+                baseRoute: 'sc.reports'
             }
-        ] : [])
+        ] : []),
     ];
 
     const renderNavItem = (item, index) => {
