@@ -14,17 +14,37 @@ import {
     ArchiveBoxXMarkIcon,
     BellAlertIcon,
     ArrowUpIcon,
-    ArrowDownIcon
+    ArrowDownIcon,
+    TrophyIcon,
+    DocumentDuplicateIcon, 
+    ClipboardDocumentCheckIcon, 
+    XCircleIcon
 } from '@heroicons/react/24/outline';
 import { router } from '@inertiajs/react';
+import { Menu } from '@headlessui/react';
+import { ChevronDownIcon as ChevronDownIcon20 } from '@heroicons/react/20/solid';
+import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
 
-export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStats, monthlyTrends, users, leadStatuses }) {
+function classNames(...classes) {
+    return classes.filter(Boolean).join(' ')
+}
+
+export default function LeadsReport({ auth, stats, userWiseStats, wonLeadsUserWise, createdLeadsUserWise, handledLeadsUserWise, statusWiseStats, monthlyTrends, users, leadStatuses, leadSources, products }) {
     const [showFilterDrawer, setShowFilterDrawer] = useState(false);
     const [loading, setLoading] = useState(false);
     const [form] = Form.useForm();
     const [expandedCards, setExpandedCards] = useState({});
+    const [filters, setFilters] = useState({
+        start_date: dayjs().startOf('month').format('YYYY-MM-DD'),
+        end_date: dayjs().endOf('month').format('YYYY-MM-DD'),
+        lead_sources: [],
+        lead_statuses: [],
+        products: [],
+        is_active: null
+    });
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
 
     const handleFilter = (values) => {
         setLoading(true);
@@ -62,13 +82,14 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
         }));
     };
 
-    const StatCard = ({ title, value, id, userStats, icon, change }) => {
+    const StatCard = ({ title, value, id, userStats, icon, change, userStatKey }) => {
         const Icon = {
             UserGroupIcon,
             DocumentPlusIcon,
             UserPlusIcon,
             ArchiveBoxXMarkIcon,
-            BellAlertIcon
+            BellAlertIcon,
+            TrophyIcon
         }[icon] || UserGroupIcon;
 
         const getUserStatValue = (stat, cardId) => {
@@ -81,8 +102,12 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
                     return stat.closed_leads || 0;
                 case 'followup':
                     return stat.followup_required || 0;
+                case 'won_leads':
+                    return stat.total_won || 0;
+                case 'created':
+                    return stat.total_created || 0;
                 default:
-                    return stat.total || 0;
+                    return userStatKey ? stat[userStatKey] || 0 : stat.total || 0;
             }
         };
 
@@ -145,6 +170,152 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
     // Custom active bar style
     const activeBarStyle = {
         fill: 'rgba(169, 36, 121, 0.05)', // Theme color with 5% opacity
+    };
+
+    const CreatedLeadsCard = () => {
+        return (
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <DocumentDuplicateIcon className="h-6 w-6 text-blue-500" aria-hidden="true" />
+                        </div>
+                        <div className="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt className="text-sm font-medium text-gray-500 truncate">Created Leads</dt>
+                                <dd className="flex items-baseline">
+                                    <div className="text-2xl font-semibold text-gray-900">
+                                        {stats?.created_leads?.total || 0}
+                                    </div>
+                                </dd>
+                            </dl>
+                        </div>
+                        <Menu as="div" className="relative">
+                            <Menu.Button className="flex items-center text-gray-400 hover:text-gray-600">
+                                <ChevronDownIcon20 className="h-5 w-5" aria-hidden="true" />
+                            </Menu.Button>
+                            <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                <div className="py-1">
+                                    {stats?.created_leads?.by_user.map((user) => (
+                                        <Menu.Item key={user.user_id}>
+                                            {({ active }) => (
+                                                <div
+                                                    className={classNames(
+                                                        active ? 'bg-gray-100' : '',
+                                                        'px-4 py-2 text-sm text-gray-700 flex justify-between'
+                                                    )}
+                                                >
+                                                    <span>{user.user_name}</span>
+                                                    <span className="font-medium">{user.count}</span>
+                                                </div>
+                                            )}
+                                        </Menu.Item>
+                                    ))}
+                                </div>
+                            </Menu.Items>
+                        </Menu>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const LeadsHandledCard = () => {
+        return (
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <div className="bg-pink-50 p-2 rounded-lg">
+                                <ClipboardDocumentCheckIcon className="h-6 w-6 text-pink-600" aria-hidden="true" />
+                            </div>
+                        </div>
+                        <div className="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt className="text-sm font-medium text-gray-500 truncate">Leads Handled</dt>
+                                <dd className="flex items-baseline">
+                                    <div className="text-2xl font-semibold text-gray-900">
+                                        {stats?.handled_leads?.total || 0}
+                                    </div>
+                                </dd>
+                            </dl>
+                        </div>
+                        <Menu as="div" className="relative">
+                            <Menu.Button className="flex items-center text-gray-400 hover:text-gray-600">
+                                <ChevronDownIcon20 className="h-5 w-5" aria-hidden="true" />
+                            </Menu.Button>
+                            <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                <div className="py-1">
+                                    {stats?.handled_leads?.by_user?.map((user) => (
+                                        <Menu.Item key={user.id}>
+                                            {({ active }) => (
+                                                <div
+                                                    className={classNames(
+                                                        active ? 'bg-gray-100' : '',
+                                                        'px-4 py-2 text-sm text-gray-700 flex justify-between'
+                                                    )}
+                                                >
+                                                    <span>{user.name}</span>
+                                                    <span className="font-medium">{user.value}</span>
+                                                </div>
+                                            )}
+                                        </Menu.Item>
+                                    ))}
+                                </div>
+                            </Menu.Items>
+                        </Menu>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const ClosedLeadsCard = () => {
+        return (
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <XCircleIcon className="h-6 w-6 text-yellow-500" aria-hidden="true" />
+                        </div>
+                        <div className="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt className="text-sm font-medium text-gray-500 truncate">Closed Leads</dt>
+                                <dd className="flex items-baseline">
+                                    <div className="text-2xl font-semibold text-gray-900">
+                                        {stats?.closed_leads || 0}
+                                    </div>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const WonLeadsCard = () => {
+        return (
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+                <div className="p-5">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <TrophyIcon className="h-6 w-6 text-purple-500" aria-hidden="true" />
+                        </div>
+                        <div className="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt className="text-sm font-medium text-gray-500 truncate">Won Leads</dt>
+                                <dd className="flex items-baseline">
+                                    <div className="text-2xl font-semibold text-gray-900">
+                                        {stats?.won_leads || 0}
+                                    </div>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -261,7 +432,7 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
             <Spin spinning={loading}>
                 <div className="p-6">
                     {/* Stats Cards */}
-                    <Row gutter={[16, 16]}>
+                    <Row gutter={[16, 16]} className="mb-4">
                         <Col span={24} md={8} lg={6}>
                             <StatCard
                                 title="Active Leads"
@@ -277,71 +448,38 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
                                 title="Leads Created"
                                 value={stats.leads_created?.value || 0}
                                 id="created"
+                                userStats={createdLeadsUserWise}
                                 icon="DocumentPlusIcon"
                                 change={stats.leads_created?.change}
+                                userStatKey="total_created"
                             />
                         </Col>
                         <Col span={24} md={8} lg={6}>
                             <StatCard
-                                title="Assigned Leads"
-                                value={stats.leads_assigned?.value || 0}
-                                id="assigned"
-                                userStats={userWiseStats}
-                                icon="UserPlusIcon"
-                                change={stats.leads_assigned?.change}
+                                title="Leads Handled"
+                                value={stats.leads_handled?.value || 0}
+                                id="handled"
+                                userStats={handledLeadsUserWise}
+                                icon="ClipboardDocumentCheckIcon"
+                                change={stats.leads_handled?.change}
+                                userStatKey="total_handled"
                             />
                         </Col>
-                        <Col span={24} md={8} lg={6}>
+                        <Col xs={24} sm={12} md={8} lg={6}>
                             <StatCard
-                                title="Closed Leads"
-                                value={stats.leads_closed?.value || 0}
-                                id="closed"
-                                userStats={userWiseStats}
-                                icon="ArchiveBoxXMarkIcon"
-                                change={stats.leads_closed?.change}
+                                title="Won Leads"
+                                value={stats.won_leads?.value || 0}
+                                id="won_leads"
+                                icon="TrophyIcon"
+                                change={stats.won_leads?.change}
+                                userStats={wonLeadsUserWise}
+                                userStatKey="total_won"
                             />
                         </Col>
                     </Row>
 
-                    {/* Main Chart - Lead Trends */}
-                    {/* <Card className="mt-8">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-medium">Lead Trends</h3>
-                            <div className="text-sm text-gray-500">
-                                Monthly Comparison
-                            </div>
-                        </div>
-                        <div style={{ width: '100%', height: 400 }}>
-                            <ResponsiveContainer>
-                                <BarChart
-                                    data={monthlyTrends}
-                                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" />
-                                    <YAxis />
-                                    <Tooltip 
-                                        cursor={{ fill: 'rgba(169, 36, 121, 0.05)' }}
-                                    />
-                                    <Legend />
-                                    <Bar 
-                                        dataKey="Created" 
-                                        name="Created" 
-                                        fill="#a92479" 
-                                        barSize={20}
-                                        activeBar={activeBarStyle}
-                                    />
-                                    <Bar 
-                                        dataKey="Closed" 
-                                        name="Closed" 
-                                        fill="rgba(169, 36, 121, 0.1)" 
-                                        barSize={20}
-                                        activeBar={activeBarStyle}
-                                    />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </Card> */}
+                    
+                    
                     
                     
                     <Card className="mt-8">
@@ -377,8 +515,13 @@ export default function LeadsReport({ auth, stats, userWiseStats, statusWiseStat
                                             barSize={20}
                                         />
                                         <Bar 
-                                            dataKey="Closed" 
+                                            dataKey="Handled" 
                                             fill="rgba(169, 36, 121, 0.7)" 
+                                            barSize={20}
+                                        />
+                                        <Bar 
+                                            dataKey="Won" 
+                                            fill="rgba(169, 36, 121, 0.5)" 
                                             barSize={20}
                                         />
                                     </BarChart>

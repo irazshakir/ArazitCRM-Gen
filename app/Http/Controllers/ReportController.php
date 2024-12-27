@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Carbon\Carbon;
 use App\Models\User;
+use App\Models\Product;
 
 class ReportController extends Controller
 {
@@ -29,7 +30,7 @@ class ReportController extends Controller
                 $query->where('lead_status', $status);
             })
             ->when($request->lead_active_status !== null, function ($query) use ($request) {
-                $query->where('lead_active_status = ?', [$request->lead_active_status === '1']);
+                $query->whereRaw('lead_active_status = ?', [$request->lead_active_status === '1']);
             });
 
         $activeLeads = (clone $baseQuery)
@@ -38,6 +39,37 @@ class ReportController extends Controller
 
         $leadsCreated = (clone $baseQuery)
             ->whereBetween('created_at', [$startDate, $endDate])
+            ->count();
+
+        // Get user-wise leads handled stats (one activity per lead per day)
+        $handledLeadsUserWise = DB::table('lead_activity_logs AS lal')
+            ->join('users', 'lal.user_id', '=', 'users.id')
+            ->whereBetween('lal.created_at', [$startDate, $endDate])
+            ->when($request->user_id, function ($query, $userId) {
+                $query->where('lal.user_id', $userId);
+            })
+            ->select(
+                'users.name',
+                DB::raw('COUNT(DISTINCT CONCAT(lal.lead_id, DATE(lal.created_at))) as total_handled')
+            )
+            ->groupBy('users.id', 'users.name')
+            ->get();
+
+        // Get total leads handled (unique leads per day across all users)
+        $totalHandledLeads = DB::table('lead_activity_logs')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when($request->user_id, function ($query, $userId) {
+                $query->where('user_id', $userId);
+            })
+            ->select(
+                'lead_id',
+                DB::raw('DATE(created_at) as activity_date')
+            )
+            ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+            ->get()
+            ->unique(function ($item) {
+                return $item->lead_id;
+            })
             ->count();
 
         $leadsAssigned = (clone $baseQuery)
@@ -54,6 +86,35 @@ class ReportController extends Controller
             ->where('followup_date', '<', Carbon::today())
             ->whereRaw('lead_active_status = true')
             ->count();
+
+        // Add Won Leads Statistics with debugging
+        $wonLeadsQuery = Lead::query()
+            ->where('lead_status', 'Won')
+            ->when($request->user_id, function ($query, $userId) {
+                $query->where('assigned_user_id', $userId);
+            })
+            ->whereBetween('won_at', [$startDate, $endDate]);
+            
+        // Debug information
+        \Log::info('Won Leads Query Debug:', [
+            'start_date' => $startDate->toDateTimeString(),
+            'end_date' => $endDate->toDateTimeString(),
+            'sql' => $wonLeadsQuery->toSql(),
+            'bindings' => $wonLeadsQuery->getBindings(),
+            'results' => $wonLeadsQuery->get()->toArray()
+        ]);
+
+        $wonLeads = $wonLeadsQuery->count();
+
+        $wonLeadsUserWise = Lead::select(
+            'users.name',
+            DB::raw('COUNT(*) as total_won')
+        )
+            ->join('users', 'leads.assigned_user_id', '=', 'users.id')
+            ->where('lead_status', 'Won')
+            ->whereBetween('won_at', [$startDate, $endDate])
+            ->groupBy('users.id', 'users.name')
+            ->get();
 
         $userWiseStats = Lead::select(
             'users.name',
@@ -102,29 +163,37 @@ class ReportController extends Controller
                 'active_leads' => [
                     'value' => $activeLeads,
                     'change' => $this->calculateActiveGrowth(),
-                    'icon' => 'UserGroupIcon'
                 ],
                 'leads_created' => [
                     'value' => $leadsCreated,
                     'change' => $this->calculateCreatedGrowth($startDate, $endDate),
-                    'icon' => 'DocumentPlusIcon'
                 ],
-                'leads_assigned' => [
-                    'value' => $leadsAssigned,
-                    'change' => $this->calculateAssignedGrowth($startDate, $endDate),
-                    'icon' => 'UserPlusIcon'
+                'leads_handled' => [
+                    'value' => $totalHandledLeads,
+                    'change' => $this->calculateHandledGrowth($startDate, $endDate),
                 ],
-                'leads_closed' => [
-                    'value' => $leadsClosed,
-                    'change' => $this->calculateClosedGrowth($startDate, $endDate),
-                    'icon' => 'ArchiveBoxXMarkIcon'
+                'won_leads' => [
+                    'value' => $wonLeads,
+                    'change' => $this->calculateWonGrowth($startDate, $endDate),
                 ],
                 'followup_required' => [
                     'value' => $followupRequired,
                     'change' => $this->calculateFollowupGrowth(),
-                    'icon' => 'BellAlertIcon'
                 ]
             ],
+            'wonLeadsUserWise' => $wonLeadsUserWise,
+            'createdLeadsUserWise' => Lead::select(
+                'users.name',
+                DB::raw('COUNT(*) as total_created')
+            )
+                ->join('users', 'leads.created_by', '=', 'users.id')
+                ->whereBetween('leads.created_at', [$startDate, $endDate])
+                ->when($request->user_id, function ($query, $userId) {
+                    $query->where('created_by', $userId);
+                })
+                ->groupBy('users.id', 'users.name')
+                ->get(),
+            'handledLeadsUserWise' => $handledLeadsUserWise,
             'userWiseStats' => $userWiseStats,
             'statusWiseStats' => Lead::select('lead_status', DB::raw('COUNT(*) as total'))
                 ->groupBy('lead_status')
@@ -231,6 +300,70 @@ class ReportController extends Controller
         return [
             'percentage' => round($change, 2),
             'type' => $change >= 0 ? 'negative' : 'positive'
+        ];
+    }
+
+    private function calculateWonGrowth($currentStartDate, $currentEndDate)
+    {
+        $daysDiff = $currentStartDate->diffInDays($currentEndDate);
+        $previousStartDate = $currentStartDate->copy()->subDays($daysDiff + 1);
+        $previousEndDate = $currentStartDate->copy()->subDay();
+
+        $current = Lead::where('lead_status', 'Won')
+            ->whereBetween('won_at', [$currentStartDate, $currentEndDate])
+            ->count();
+
+        $previous = Lead::where('lead_status', 'Won')
+            ->whereBetween('won_at', [$previousStartDate, $previousEndDate])
+            ->count();
+
+        if ($previous == 0) return ['percentage' => 0, 'type' => 'neutral'];
+
+        $change = (($current - $previous) / $previous) * 100;
+        return [
+            'percentage' => round($change, 2),
+            'type' => $change >= 0 ? 'positive' : 'negative'
+        ];
+    }
+
+    private function calculateHandledGrowth($currentStartDate, $currentEndDate)
+    {
+        $daysDiff = $currentStartDate->diffInDays($currentEndDate);
+        $previousStartDate = $currentStartDate->copy()->subDays($daysDiff + 1);
+        $previousEndDate = $currentStartDate->copy()->subDay();
+
+        $current = DB::table('lead_activity_logs')
+            ->whereBetween('created_at', [$currentStartDate, $currentEndDate])
+            ->select(
+                'lead_id',
+                DB::raw('DATE(created_at) as activity_date')
+            )
+            ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+            ->get()
+            ->unique(function ($item) {
+                return $item->lead_id;
+            })
+            ->count();
+
+        $previous = DB::table('lead_activity_logs')
+            ->whereBetween('created_at', [$previousStartDate, $previousEndDate])
+            ->select(
+                'lead_id',
+                DB::raw('DATE(created_at) as activity_date')
+            )
+            ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+            ->get()
+            ->unique(function ($item) {
+                return $item->lead_id;
+            })
+            ->count();
+
+        if ($previous == 0) return ['percentage' => 0, 'type' => 'neutral'];
+
+        $change = (($current - $previous) / $previous) * 100;
+        return [
+            'percentage' => round($change, 2),
+            'type' => $change >= 0 ? 'positive' : 'negative'
         ];
     }
 
@@ -415,7 +548,7 @@ class ReportController extends Controller
         $change = (($current - $previous) / $previous) * 100;
         return [
             'percentage' => round($change, 2),
-            'type' => $change >= 0 ? 'negative' : 'positive' // Inverse because growth in non-potential is negative
+            'type' => $change >= 0 ? 'negative' : 'positive'
         ];
     }
 
@@ -438,7 +571,7 @@ class ReportController extends Controller
         $change = (($current - $previous) / $previous) * 100;
         return [
             'percentage' => round($change, 2),
-            'type' => $change >= 0 ? 'negative' : 'positive' // Inverse because growth in lost leads is negative
+            'type' => $change >= 0 ? 'negative' : 'positive'
         ];
     }
 
@@ -664,5 +797,204 @@ class ReportController extends Controller
         $previousLeads = $previousLeadsQuery->count();
 
         return $previousLeads > 0 ? $previousBudget / $previousLeads : 0;
+    }
+
+    public function leads(Request $request)
+    {
+        $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : now()->startOfMonth();
+        $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : now()->endOfMonth();
+
+        $stats = [
+            'active_leads' => $this->getActiveLeadsStats($startDate, $endDate),
+            'leads_created' => $this->getLeadsCreatedStats($startDate, $endDate),
+            'leads_handled' => $this->getLeadsHandledStats($startDate, $endDate),
+            'leads_won' => $this->getLeadsWonStats($startDate, $endDate)
+        ];
+
+        return Inertia::render('Reports/LeadsReport', [
+            'stats' => $stats,
+            'monthlyTrends' => $this->getMonthlyTrends($startDate, $endDate)
+        ]);
+    }
+
+    private function getActiveLeadsStats($startDate, $endDate)
+    {
+        // Get total active leads in the period
+        $totalActive = Lead::whereBetween('created_at', [$startDate, $endDate])
+            ->whereRaw('lead_active_status = true')
+            ->count();
+
+        // Get user-wise breakdown for active leads
+        $userWiseStats = Lead::whereBetween('created_at', [$startDate, $endDate])
+            ->whereRaw('lead_active_status = true')
+            ->select('assigned_to', DB::raw('COUNT(*) as value'))
+            ->groupBy('assigned_to')
+            ->with('assignedTo:id,name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->assigned_to,
+                    'name' => $item->assignedTo ? $item->assignedTo->name : 'Unknown',
+                    'value' => $item->value
+                ];
+            });
+
+        return [
+            'value' => $totalActive,
+            'change' => 0,
+            'userWise' => $userWiseStats
+        ];
+    }
+
+    private function getLeadsCreatedStats($startDate, $endDate)
+    {
+        // Get total leads created in the period
+        $totalLeads = Lead::whereBetween('created_at', [$startDate, $endDate])->count();
+
+        // Get user-wise breakdown for created leads
+        $userWiseStats = Lead::whereBetween('created_at', [$startDate, $endDate])
+            ->select('created_by', DB::raw('COUNT(*) as value'))
+            ->groupBy('created_by')
+            ->with('creator:id,name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->created_by,
+                    'name' => $item->creator ? $item->creator->name : 'Unknown',
+                    'value' => $item->value
+                ];
+            });
+
+        return [
+            'value' => $totalLeads,
+            'change' => 0,
+            'userWise' => $userWiseStats
+        ];
+    }
+
+    private function getLeadsHandledStats($startDate, $endDate)
+    {
+        // Get total leads handled in the period
+        $totalHandled = DB::table('lead_activity_logs')
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->select(
+                'lead_id',
+                DB::raw('DATE(created_at) as activity_date')
+            )
+            ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+            ->get()
+            ->unique(function ($item) {
+                return $item->lead_id;
+            })
+            ->count();
+
+        // Get user-wise breakdown for handled leads
+        $userWiseStats = DB::table('lead_activity_logs as l')
+            ->join('users as u', 'l.user_id', '=', 'u.id')
+            ->whereBetween('l.created_at', [$startDate, $endDate])
+            ->select(
+                'l.user_id',
+                'u.name as user_name',
+                DB::raw('COUNT(DISTINCT l.lead_id) as count')
+            )
+            ->groupBy('l.user_id', 'u.name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'user_id' => $item->user_id,
+                    'user_name' => $item->user_name,
+                    'count' => $item->count
+                ];
+            });
+
+        return [
+            'value' => $totalHandled,
+            'change' => 0,
+            'userWise' => $userWiseStats
+        ];
+    }
+
+    private function getLeadsWonStats($startDate, $endDate)
+    {
+        // Get total won leads in the period
+        $totalWon = Lead::where('lead_status', 'Won')
+            ->whereBetween('won_at', [$startDate, $endDate])
+            ->count();
+
+        // Get user-wise breakdown for won leads
+        $userWiseStats = Lead::where('lead_status', 'Won')
+            ->whereBetween('won_at', [$startDate, $endDate])
+            ->join('users', 'leads.assigned_to', '=', 'users.id')
+            ->where('users.status', 'active')
+            ->select(
+                'users.id',
+                'users.name',
+                DB::raw('COUNT(*) as value')
+            )
+            ->groupBy('users.id', 'users.name')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'value' => $item->value
+                ];
+            });
+
+        return [
+            'value' => $totalWon,
+            'change' => 0,
+            'userWise' => $userWiseStats
+        ];
+    }
+
+    private function getMonthlyTrends($startDate, $endDate)
+    {
+        // First, get the months we need to report on
+        $months = Lead::whereBetween('created_at', [$startDate, $endDate])
+            ->select(DB::raw("to_char(created_at, 'YYYY-MM') as month"))
+            ->groupBy('month')
+            ->orderBy('month')
+            ->pluck('month');
+
+        // Then, for each month, get the stats
+        $trends = [];
+        foreach ($months as $month) {
+            $monthStart = \Carbon\Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $monthEnd = \Carbon\Carbon::createFromFormat('Y-m', $month)->endOfMonth();
+
+            // Get lead stats
+            $leadStats = Lead::whereBetween('created_at', [$monthStart, $monthEnd])
+                ->select([
+                    DB::raw('COUNT(*) as created'),
+                    DB::raw("COUNT(CASE WHEN lead_active_status = false AND closed_at IS NOT NULL THEN 1 END) as closed"),
+                    DB::raw("COUNT(CASE WHEN lead_status = 'Won' AND won_at IS NOT NULL THEN 1 END) as won")
+                ])
+                ->first();
+
+            // Get count of unique leads handled per day
+            $handledLeads = DB::table('lead_activity_logs')
+                ->whereBetween('created_at', [$monthStart, $monthEnd])
+                ->select(
+                    'lead_id',
+                    DB::raw('DATE(created_at) as activity_date')
+                )
+                ->groupBy('lead_id', DB::raw('DATE(created_at)'))
+                ->get()
+                ->unique(function ($item) {
+                    return $item->lead_id;
+                })
+                ->count();
+
+            $trends[] = [
+                'month' => $month,
+                'created' => $leadStats->created,
+                'handled' => $handledLeads,
+                'closed' => $leadStats->closed,
+                'won' => $leadStats->won
+            ];
+        }
+
+        return collect($trends);
     }
 }
