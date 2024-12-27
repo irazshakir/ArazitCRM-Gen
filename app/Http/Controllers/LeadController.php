@@ -181,6 +181,11 @@ class LeadController extends Controller
      */
     public function edit(Lead $lead)
     {
+        // Check if user has access to this lead
+        if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
         // If the current user is the assigned user, mark the lead as viewed
         if ($lead->assigned_user_id === Auth::id()) {
             $lead->update([
@@ -211,6 +216,11 @@ class LeadController extends Controller
      */
     public function update(UpdateLeadRequest $request, Lead $lead)
     {
+        // Check if user has access to this lead
+        if (Auth::user()->role === 'sales-consultant' && $lead->assigned_user_id !== Auth::id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
         $validated = $request->validated();
         
         // Handle assigned user change

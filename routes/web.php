@@ -30,35 +30,31 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/leads', [DashboardController::class, 'leads'])->name('dashboard.leads');
+    
+    // Common routes for leads - accessible by both admin and sales consultant
+    Route::resource('leads', LeadController::class);
     Route::get('leads/unread-count', [LeadController::class, 'unreadCount'])->name('leads.unread-count');
     Route::get('leads/unread-notifications', [LeadController::class, 'unreadNotifications'])
         ->name('leads.unread-notifications');
     Route::post('leads/{lead}/mark-as-viewed', [LeadController::class, 'markAsViewed'])
         ->name('leads.mark-as-viewed');
-
-    // Common routes for both admin and sales consultant
     Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
     Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
     Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
     Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
 
+    // Admin specific routes
     Route::group(['middleware' => function ($request, $next) {
         if (Auth::user()->role !== 'admin') {
             abort(403, 'Unauthorized action.');
         }
         return $next($request);
     }, 'prefix' => 'admin'], function () {
-        Route::resource('leads', LeadController::class);
         Route::post('leads/bulk-upload', [LeadController::class, 'bulkUpload'])->name('leads.bulk-upload');
         Route::get('leads/template-download', [LeadController::class, 'downloadTemplate'])->name('leads.template-download');
         Route::get('reports/leads', [ReportController::class, 'leads'])->name('reports.leads');
         Route::get('reports/logs', [ReportController::class, 'logs'])->name('reports.logs');
-        // lead notes related routes 
-        // Route::post('lead-notes', [LeadNotesController::class, 'store'])->name('lead-notes.store');
-        // Route::post('lead-documents', [LeadDocumentController::class, 'store'])->name('lead-documents.store');
-        // Route::delete('lead-documents/{document}', [LeadDocumentController::class, 'destroy'])->name('lead-documents.destroy');
-        // Route::get('lead-documents/{document}/download', [LeadDocumentController::class, 'download'])->name('lead-documents.download');
-
         Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::post('invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
